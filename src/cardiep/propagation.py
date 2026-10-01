@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from heapq import heappop, heappush
+
 import numpy as np
 
 from .conduction import RootSchedule
