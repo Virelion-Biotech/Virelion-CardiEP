@@ -8,7 +8,7 @@ import numpy as np
 
 from .ecg import ECGResult
 from .models import EPObservation
-from .provenance import uri_to_path
+from .provenance import uri_to_path, verify_file_sha256
 
 
 @dataclass(frozen=True)
@@ -54,17 +54,27 @@ def _load_json(observation: EPObservation) -> dict[str, Any]:
         raise ValueError(
             f"Native discrepancy evaluation currently expects JSON observation artifacts: {path}"
         )
+    verify_file_sha256(path, observation.artifact.sha256)
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise TypeError("Observation artifact JSON must contain an object")
     return raw
 
 
-def _resample(values: np.ndarray, n: int) -> np.ndarray:
+def _signal(values: np.ndarray, name: str) -> np.ndarray:
     x = np.asarray(values, dtype=float).reshape(-1)
+    if len(x) < 2:
+        raise ValueError(f"{name} requires at least two samples")
+    if not np.isfinite(x).all():
+        raise ValueError(f"{name} must contain only finite samples")
+    return x
+
+
+def _resample(values: np.ndarray, n: int) -> np.ndarray:
+    x = _signal(values, "Signal")
     if len(x) == n:
         return x
-    if len(x) < 2 or n < 2:
+    if n < 2:
         raise ValueError("Signals require at least two samples")
     source = np.linspace(0.0, 1.0, len(x))
     target = np.linspace(0.0, 1.0, n)
@@ -80,8 +90,14 @@ def _standardize(values: np.ndarray) -> np.ndarray:
 
 def correlation_distance(observed: np.ndarray, simulated: np.ndarray) -> float:
     n = max(len(observed), len(simulated))
-    a = _standardize(_resample(observed, n))
-    b = _standardize(_resample(simulated, n))
+    observed_resampled = _resample(observed, n)
+    simulated_resampled = _resample(simulated, n)
+    if np.ptp(observed_resampled) <= 1e-12:
+        raise ValueError("Correlation discrepancy is undefined for a constant observed signal")
+    if np.ptp(simulated_resampled) <= 1e-12:
+        raise ValueError("Correlation discrepancy is undefined for a constant simulated signal")
+    a = _standardize(observed_resampled)
+    b = _standardize(simulated_resampled)
     corr = float(np.clip(np.mean(a * b), -1.0, 1.0))
     return 1.0 - corr
 
@@ -92,6 +108,18 @@ def normalized_rmse(observed: np.ndarray, simulated: np.ndarray) -> float:
     b = _resample(simulated, n)
     scale = max(float(np.ptp(a)), float(np.sqrt(np.mean((a - np.mean(a)) ** 2))), 1e-12)
     return float(np.sqrt(np.mean((a - b) ** 2)) / scale)
+
+
+def normalized_mae(observed: np.ndarray, simulated: np.ndarray) -> float:
+    n = max(len(observed), len(simulated))
+    a = _resample(observed, n)
+    b = _resample(simulated, n)
+    scale = max(
+        float(np.ptp(a)),
+        float(np.sqrt(np.mean((a - np.mean(a)) ** 2))),
+        1e-12,
+    )
+    return float(np.mean(np.abs(a - b)) / scale)
 
 
 def huber_rmse(observed: np.ndarray, simulated: np.ndarray, delta: float = 1.5) -> float:
@@ -106,13 +134,24 @@ def huber_rmse(observed: np.ndarray, simulated: np.ndarray, delta: float = 1.5) 
 def _ecg_leads(raw: dict[str, Any]) -> tuple[list[str], dict[str, np.ndarray]]:
     if "beat_template" in raw:
         mapping = raw["beat_template"]
-        names = list(raw.get("lead_names") or mapping)
-        return names, {str(name): np.asarray(mapping[name], dtype=float) for name in names if name in mapping}
-    names = [str(x) for x in raw["lead_names"]]
-    values = np.asarray(raw["values"], dtype=float)
-    if values.ndim != 2 or values.shape[0] != len(names):
-        raise ValueError("ECG artifact lead_names/values shape mismatch")
-    return names, {name: values[i] for i, name in enumerate(names)}
+        if not isinstance(mapping, dict) or not mapping:
+            raise TypeError("ECG beat_template must be a non-empty mapping")
+        names = [str(name) for name in (raw.get("lead_names") or mapping)]
+        missing = [name for name in names if name not in mapping]
+        if missing:
+            raise ValueError(f"ECG beat_template is missing declared leads: {missing}")
+        leads = {name: _signal(mapping[name], f"ECG lead {name}") for name in names}
+    else:
+        if "lead_names" not in raw or "values" not in raw:
+            raise ValueError("ECG artifact requires lead_names and values")
+        names = [str(x) for x in raw["lead_names"]]
+        values = np.asarray(raw["values"], dtype=float)
+        if values.ndim != 2 or values.shape[0] != len(names):
+            raise ValueError("ECG artifact lead_names/values shape mismatch")
+        leads = {name: _signal(values[i], f"ECG lead {name}") for i, name in enumerate(names)}
+    if len(names) != len(set(names)):
+        raise ValueError("ECG lead_names must be unique")
+    return names, leads
 
 
 def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> float:
@@ -127,6 +166,7 @@ def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> f
         "correlation": correlation_distance,
         "rmse": normalized_rmse,
         "nrmse": normalized_rmse,
+        "mae": normalized_mae,
         "huber": huber_rmse,
         "gaussian": normalized_rmse,
         "student_t": huber_rmse,
@@ -146,10 +186,16 @@ def _field_values(raw: dict[str, Any], *keys: str) -> np.ndarray:
 def field_discrepancy(observed: np.ndarray, simulated: np.ndarray, metric: str) -> float:
     a = np.asarray(observed, dtype=float).reshape(-1)
     b = np.asarray(simulated, dtype=float).reshape(-1)
+    if a.size == 0 or b.size == 0:
+        raise ValueError("Observed and simulated field maps must be non-empty")
     if a.shape != b.shape:
         raise ValueError("Observed and simulated field maps must have the same number of nodes")
+    if not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError("Observed and simulated field maps must contain finite values")
     if metric in {"rmse", "gaussian"}:
         return float(np.sqrt(np.mean((a - b) ** 2)))
+    if metric == "mae":
+        return float(np.mean(np.abs(a - b)))
     if metric in {"student_t", "huber"}:
         scale = max(float(np.std(a)), 1.0)
         residual = np.abs((a - b) / scale)
@@ -170,6 +216,8 @@ def evaluate_observations(
     hints: list[dict[str, Any]] | None = None,
 ) -> DiscrepancyReport:
     observation_by_id = {item.observation_id: item for item in observations}
+    if len(observation_by_id) != len(observations):
+        raise ValueError("EP observation IDs must be unique")
     term_specs: list[dict[str, Any]] = []
     if hints:
         term_specs = [dict(item) for item in hints]
@@ -200,6 +248,16 @@ def evaluate_observations(
                     "weight": 1.0,
                 })
 
+    if not term_specs:
+        raise ValueError("No supported discrepancy terms were defined for the observations")
+    term_ids = [
+        str(spec.get("term_id") or "")
+        for spec in term_specs
+        if spec.get("term_id") is not None
+    ]
+    if len(term_ids) != len(set(term_ids)):
+        raise ValueError("Likelihood term IDs must be unique")
+
     terms: list[DiscrepancyTerm] = []
     for spec in term_specs:
         observation_id = spec.get("observation_id")
@@ -213,6 +271,8 @@ def evaluate_observations(
         output = str(spec.get("model_output") or "ecg")
         metric = str(spec.get("discrepancy") or "gaussian")
         weight = float(spec.get("weight", 1.0))
+        if not np.isfinite(weight) or weight <= 0:
+            raise ValueError("Discrepancy weights must be positive and finite")
         metadata = dict(spec.get("metadata") or {})
 
         if output == "ecg":
@@ -226,8 +286,13 @@ def evaluate_observations(
             if observed_value is None:
                 raise ValueError("QRS-duration term is missing the observed duration")
             predicted = float(np.max(activation_ms) - np.min(activation_ms))
-            sigma = max(float(dict(spec.get("noise_parameters") or {}).get("sigma_ms", 1.0)), 1e-6)
-            value = abs(predicted - float(observed_value)) / sigma
+            sigma = float(dict(spec.get("noise_parameters") or {}).get("sigma_ms", 1.0))
+            observed_value = float(observed_value)
+            if not np.isfinite(sigma) or sigma <= 0:
+                raise ValueError("QRS sigma_ms must be positive and finite")
+            if not np.isfinite(observed_value):
+                raise ValueError("Observed QRS duration must be finite")
+            value = abs(predicted - observed_value) / sigma
         elif output == "activation_map":
             observed = _field_values(raw, "activation_ms", "values_ms", "values")
             value = field_discrepancy(observed, activation_ms, metric)
@@ -236,6 +301,8 @@ def evaluate_observations(
             value = field_discrepancy(observed, repolarization_ms, metric)
         else:
             raise ValueError(f"Unsupported CardiEP model_output in discrepancy term: {output}")
+        if not np.isfinite(value):
+            raise ValueError(f"Discrepancy term produced a non-finite value: {spec}")
         terms.append(
             DiscrepancyTerm(
                 term_id=str(spec.get("term_id") or f"{observation_id}:{output}"),
