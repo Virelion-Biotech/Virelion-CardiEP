@@ -62,15 +62,33 @@ def pseudo_ecg(
         raise ValueError(
             "Pseudo-ECG generation requires electrode coordinates in the EP geometry"
         )
+    scalars = {
+        "sample_rate_hz": sample_rate_hz,
+        "qrs_sigma_ms": qrs_sigma_ms,
+        "t_sigma_ms": t_sigma_ms,
+        "repolarization_scale": repolarization_scale,
+    }
+    if any(not np.isfinite(float(value)) for value in scalars.values()):
+        raise ValueError("ECG numerical settings must be finite")
     if sample_rate_hz <= 0 or qrs_sigma_ms <= 0 or t_sigma_ms <= 0:
         raise ValueError("ECG sampling rate and temporal widths must be positive")
+    if repolarization_scale < 0:
+        raise ValueError("repolarization_scale must be non-negative")
     activation = np.asarray(activation_ms, dtype=float)
     repolarization = np.asarray(repolarization_ms, dtype=float)
     if activation.shape != (geometry.n_nodes,) or repolarization.shape != (geometry.n_nodes,):
         raise ValueError("Activation/repolarization maps must be node-wise")
-    end_ms = float(duration_ms) if duration_ms is not None else float(np.max(repolarization) + 80.0)
-    if end_ms <= 0:
-        raise ValueError("ECG duration must be positive")
+    if not np.isfinite(activation).all() or not np.isfinite(repolarization).all():
+        raise ValueError("Activation/repolarization maps must be finite")
+    if np.any(repolarization < activation):
+        raise ValueError("Repolarization times must not precede activation times")
+    end_ms = (
+        float(duration_ms)
+        if duration_ms is not None
+        else float(np.max(repolarization) + 80.0)
+    )
+    if not np.isfinite(end_ms) or end_ms <= 0:
+        raise ValueError("ECG duration must be positive and finite")
     dt_ms = 1000.0 / float(sample_rate_hz)
     time = np.arange(0.0, end_ms + 0.5 * dt_ms, dt_ms, dtype=float)
 
@@ -122,8 +140,8 @@ def pseudo_ecg(
         values = potentials
 
     values = values - values[:, :1]
-    max_abs = np.max(np.abs(values), axis=1, keepdims=True)
-    values = values / np.maximum(max_abs, 1e-12)
+    max_abs = float(np.max(np.abs(values)))
+    values = values / max(max_abs, 1e-12)
     return ECGResult(
         lead_names=tuple(lead_names),
         time_ms=time,
