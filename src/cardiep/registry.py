@@ -20,11 +20,11 @@ def discover_backends() -> dict[str, EPBackend]:
         try:
             backend: Any = ep.load()
             backend = backend() if isinstance(backend, type) else backend
-            name = str(getattr(backend, "name"))
+            name = str(backend.name)
             if not name:
                 continue
             backends[name] = backend
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
             warnings.warn(
                 f"Could not load CardiEP backend plugin {ep.name!r}: {exc}",
                 RuntimeWarning,
@@ -41,7 +41,7 @@ def backend_status(backends: dict[str, EPBackend] | None = None) -> list[dict[st
         try:
             available = bool(backend.available())
             error = None
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
             available = False
             error = f"{type(exc).__name__}: {exc}"
         output.append(
