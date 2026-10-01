@@ -82,7 +82,7 @@ class EPCalibrationRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def require_observations(self) -> "EPCalibrationRequest":
+    def require_observations(self) -> EPCalibrationRequest:
         if not self.observations:
             raise ValueError("At least one calibration observation is required")
         for lo, hi in self.parameter_bounds.values():
