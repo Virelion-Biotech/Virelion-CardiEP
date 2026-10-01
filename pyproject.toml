@@ -1,16 +1,24 @@
 [project]
 name = "virelion-cardiep"
-version = "0.1.0"
-description = "Patient-specific cardiac electrophysiology contracts, solver orchestration, and calibration interfaces for HeartTwin"
+version = "0.2.0"
+description = "Patient-specific cardiac electrophysiology simulation, personalization, and backend orchestration for HeartTwin"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
-dependencies = ["pydantic>=2.6,<3"]
+dependencies = [
+  "numpy>=1.26,<3",
+  "pydantic>=2.6,<3",
+]
 
 [project.optional-dependencies]
+io = ["meshio>=5.3,<6"]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 cardiep = "cardiep.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Virelion-Biotech/Virelion-CardiEP"
+Issues = "https://github.com/Virelion-Biotech/Virelion-CardiEP/issues"
 
 [build-system]
 requires = ["setuptools>=68"]
