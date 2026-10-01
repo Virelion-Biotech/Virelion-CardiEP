@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 
 def canonical_json(value: Any) -> str:
