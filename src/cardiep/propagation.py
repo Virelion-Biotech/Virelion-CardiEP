@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from heapq import heappop, heappush
-from typing import Any
-
 import numpy as np
 
 from .conduction import RootSchedule
@@ -152,7 +150,7 @@ def anisotropic_eikonal(
     }
     return PropagationResult(
         activation_ms=distance,
-        edge_count=int(len(edges)),
+        edge_count=len(edges),
         parameters=used,
         root_schedule=roots,
         warnings=tuple(warnings),
