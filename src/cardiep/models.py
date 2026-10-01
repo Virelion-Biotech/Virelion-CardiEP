@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-def _require_unique_observations(observations: list["EPObservation"]) -> None:
+def _require_unique_observations(observations: list[EPObservation]) -> None:
     ids = [item.observation_id for item in observations]
     if len(ids) != len(set(ids)):
         raise ValueError("EP observation IDs must be unique")
@@ -58,7 +58,7 @@ class EPParameterSet(BaseModel):
     source: Literal["prior", "calibrated", "fixed", "unknown"] = "unknown"
 
     @model_validator(mode="after")
-    def require_finite_values(self) -> "EPParameterSet":
+    def require_finite_values(self) -> EPParameterSet:
         for name, value in self.values.items():
             if not math.isfinite(float(value)):
                 raise ValueError(f"EP parameter {name!r} must be finite")
@@ -76,7 +76,7 @@ class EPSimulationRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_observations(self) -> "EPSimulationRequest":
+    def validate_observations(self) -> EPSimulationRequest:
         _require_unique_observations(self.observations)
         return self
 
@@ -112,7 +112,7 @@ class EPCalibrationRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def require_problem_definition(self) -> "EPCalibrationRequest":
+    def require_problem_definition(self) -> EPCalibrationRequest:
         if not self.observations:
             raise ValueError("At least one calibration observation is required")
         _require_unique_observations(self.observations)
