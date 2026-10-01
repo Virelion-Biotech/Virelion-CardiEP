@@ -10,7 +10,7 @@ from .api import EPAPI
 def _load_payload(path: str) -> dict:
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError("Request JSON must contain an object")
+        raise TypeError("Request JSON must contain an object")
     return raw
 
 
