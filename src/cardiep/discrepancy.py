@@ -56,7 +56,7 @@ def _load_json(observation: EPObservation) -> dict[str, Any]:
         )
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError("Observation artifact JSON must contain an object")
+        raise TypeError("Observation artifact JSON must contain an object")
     return raw
 
 
