@@ -1,5 +1,6 @@
 """Public API for Virelion-CardiEP."""
 
+from .api import EPAPI
 from .conduction import RootSchedule, resolve_root_schedule
 from .discrepancy import DiscrepancyReport, DiscrepancyTerm, evaluate_observations
 from .ecg import ECGResult, pseudo_ecg
@@ -31,6 +32,7 @@ __all__ = [
     "ECGResult",
     "EPCalibrationRequest",
     "EPCalibrationResult",
+    "EPAPI",
     "EPGeometry",
     "EPObservation",
     "EPParameterSet",
