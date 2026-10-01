@@ -107,7 +107,7 @@ class EPGeometry:
 
     @property
     def n_nodes(self) -> int:
-        return int(len(self.node_xyz_cm))
+        return len(self.node_xyz_cm)
 
     @property
     def edges(self) -> np.ndarray:
@@ -123,8 +123,8 @@ class EPGeometry:
     def summary(self) -> dict[str, Any]:
         return {
             "n_nodes": self.n_nodes,
-            "n_tetrahedra": int(len(self.tetrahedra)),
-            "n_edges": int(len(self.edges)),
+            "n_tetrahedra": len(self.tetrahedra),
+            "n_edges": len(self.edges),
             "has_fibre": self.fibre is not None,
             "has_sheet": self.sheet is not None,
             "has_normal": self.normal is not None,
@@ -132,7 +132,7 @@ class EPGeometry:
             "ventricular_coordinates": sorted(self.ventricular_coordinates),
             "electrodes": sorted(self.electrodes_cm),
             "root_nodes": list(self.root_nodes),
-            "n_endocardial_nodes": 0 if self.endocardial_nodes is None else int(len(self.endocardial_nodes)),
+            "n_endocardial_nodes": 0 if self.endocardial_nodes is None else len(self.endocardial_nodes),
         }
 
 
