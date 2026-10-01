@@ -233,7 +233,16 @@ class NativeEikonalBackend:
             raise ValueError("Native calibration requires at least one bounded parameter")
         parameters = dict(request.initial_parameters.values if request.initial_parameters else {})
         for name, (low, high) in request.parameter_bounds.items():
-            parameters.setdefault(name, 0.5 * (float(low) + float(high)))
+            low_value, high_value = float(low), float(high)
+            if name in parameters:
+                initial = float(parameters[name])
+                if not low_value <= initial <= high_value:
+                    raise ValueError(
+                        f"Initial parameter {name!r}={initial} lies outside "
+                        f"its calibration bounds [{low_value}, {high_value}]"
+                    )
+            else:
+                parameters[name] = 0.5 * (low_value + high_value)
 
         step_fraction = float(request.settings.get("step_fraction", 0.25))
         max_iterations = int(request.settings.get("max_iterations", 24))

@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import math
+import string
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def _require_unique_observations(observations: list[EPObservation]) -> None:
+    ids = [item.observation_id for item in observations]
+    if len(ids) != len(set(ids)):
+        raise ValueError("EP observation IDs must be unique")
 
 
 class ArtifactRef(BaseModel):
@@ -13,6 +21,16 @@ class ArtifactRef(BaseModel):
     uri: str
     sha256: str | None = Field(default=None, min_length=64, max_length=64)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_sha256(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        lowered = value.lower()
+        if any(character not in string.hexdigits for character in lowered):
+            raise ValueError("sha256 must contain exactly 64 hexadecimal characters")
+        return lowered
 
 
 class EPObservation(BaseModel):
@@ -39,6 +57,13 @@ class EPParameterSet(BaseModel):
     units: dict[str, str] = Field(default_factory=dict)
     source: Literal["prior", "calibrated", "fixed", "unknown"] = "unknown"
 
+    @model_validator(mode="after")
+    def require_finite_values(self) -> EPParameterSet:
+        for name, value in self.values.items():
+            if not math.isfinite(float(value)):
+                raise ValueError(f"EP parameter {name!r} must be finite")
+        return self
+
 
 class EPSimulationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -49,6 +74,11 @@ class EPSimulationRequest(BaseModel):
     parameters: EPParameterSet
     observations: list[EPObservation] = Field(default_factory=list)
     settings: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_observations(self) -> EPSimulationRequest:
+        _require_unique_observations(self.observations)
+        return self
 
 
 class EPSimulationResult(BaseModel):
@@ -82,10 +112,13 @@ class EPCalibrationRequest(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def require_observations(self) -> EPCalibrationRequest:
+    def require_problem_definition(self) -> EPCalibrationRequest:
         if not self.observations:
             raise ValueError("At least one calibration observation is required")
-        for lo, hi in self.parameter_bounds.values():
+        _require_unique_observations(self.observations)
+        for name, (lo, hi) in self.parameter_bounds.items():
+            if not (math.isfinite(float(lo)) and math.isfinite(float(hi))):
+                raise ValueError(f"Parameter bounds for {name!r} must be finite")
             if lo >= hi:
                 raise ValueError("Parameter bounds must satisfy lower < upper")
         return self

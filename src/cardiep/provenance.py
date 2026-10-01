@@ -34,3 +34,14 @@ def uri_to_path(uri: str, *, relative_to: str | Path | None = None) -> Path:
     if not path.is_absolute() and relative_to is not None:
         path = Path(relative_to) / path
     return path.expanduser().resolve()
+
+
+def verify_file_sha256(path: str | Path, expected_sha256: str | None) -> None:
+    if expected_sha256 is None:
+        return
+    actual = file_sha256(path)
+    if actual.lower() != expected_sha256.lower():
+        raise ValueError(
+            f"Artifact SHA-256 mismatch for {Path(path)}: "
+            f"expected {expected_sha256.lower()}, got {actual.lower()}"
+        )

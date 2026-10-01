@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from .models import ArtifactRef
-from .provenance import uri_to_path
+from .provenance import uri_to_path, verify_file_sha256
 
 _UNIT_TO_CM = {"cm": 1.0, "mm": 0.1, "m": 100.0}
 
@@ -18,6 +18,16 @@ def _unit_scale(unit: str) -> float:
     if key not in _UNIT_TO_CM:
         raise ValueError("Geometry units must be explicitly one of: mm, cm, m")
     return _UNIT_TO_CM[key]
+
+
+def _as_integer_array(values: Any, name: str) -> np.ndarray:
+    raw = np.asarray(values)
+    if np.issubdtype(raw.dtype, np.integer):
+        return raw.astype(np.int64, copy=False)
+    numeric = np.asarray(values, dtype=float)
+    if not np.isfinite(numeric).all() or not np.equal(numeric, np.floor(numeric)).all():
+        raise ValueError(f"{name} must contain finite integer values")
+    return numeric.astype(np.int64)
 
 
 def _normalize_vectors(values: np.ndarray | None, name: str, n: int) -> np.ndarray | None:
@@ -62,7 +72,7 @@ class EPGeometry:
 
     def __post_init__(self) -> None:
         xyz = np.asarray(self.node_xyz_cm, dtype=float)
-        tetra = np.asarray(self.tetrahedra, dtype=int)
+        tetra = _as_integer_array(self.tetrahedra, "tetrahedra")
         if xyz.ndim != 2 or xyz.shape[1] != 3 or len(xyz) < 4:
             raise ValueError("node_xyz_cm must have shape (N, 3) with N >= 4")
         if not np.isfinite(xyz).all():
@@ -71,13 +81,25 @@ class EPGeometry:
             raise ValueError("tetrahedra must have shape (M, 4) with M >= 1")
         if tetra.min() < 0 or tetra.max() >= len(xyz):
             raise ValueError("tetrahedra contain out-of-range node indices")
+        sorted_tetra = np.sort(tetra, axis=1)
+        if np.any(np.diff(sorted_tetra, axis=1) == 0):
+            raise ValueError("tetrahedra must reference four distinct nodes")
+        p0 = xyz[tetra[:, 0]]
+        p1 = xyz[tetra[:, 1]]
+        p2 = xyz[tetra[:, 2]]
+        p3 = xyz[tetra[:, 3]]
+        volume6 = np.einsum("ij,ij->i", np.cross(p1 - p0, p2 - p0), p3 - p0)
+        scale = max(float(np.max(np.ptp(xyz, axis=0))), 1.0)
+        tolerance = 100.0 * np.finfo(float).eps * scale**3
+        if np.any(np.abs(volume6) <= tolerance):
+            raise ValueError("tetrahedra contain zero-volume or numerically degenerate cells")
         object.__setattr__(self, "node_xyz_cm", xyz)
         object.__setattr__(self, "tetrahedra", tetra)
         object.__setattr__(self, "fibre", _normalize_vectors(self.fibre, "fibre", len(xyz)))
         object.__setattr__(self, "sheet", _normalize_vectors(self.sheet, "sheet", len(xyz)))
         object.__setattr__(self, "normal", _normalize_vectors(self.normal, "normal", len(xyz)))
         if self.scar_labels is not None:
-            labels = np.asarray(self.scar_labels, dtype=int).reshape(-1)
+            labels = _as_integer_array(self.scar_labels, "scar_labels").reshape(-1)
             if len(labels) != len(xyz) or np.any(~np.isin(labels, [0, 1, 2])):
                 raise ValueError("scar_labels must be node-wise labels in {0,1,2}")
             object.__setattr__(self, "scar_labels", labels)
@@ -95,12 +117,17 @@ class EPGeometry:
                 raise ValueError(f"Electrode {name!r} must be a finite xyz coordinate")
             electrodes[str(name)] = arr
         object.__setattr__(self, "electrodes_cm", electrodes)
-        roots = tuple(int(x) for x in self.root_nodes)
+        root_array = _as_integer_array(self.root_nodes, "root_nodes").reshape(-1)
+        roots = tuple(int(x) for x in root_array)
         if any(x < 0 or x >= len(xyz) for x in roots):
             raise ValueError("root_nodes contain out-of-range indices")
+        if len(roots) != len(set(roots)):
+            raise ValueError("root_nodes must be unique")
         object.__setattr__(self, "root_nodes", roots)
         if self.endocardial_nodes is not None:
-            nodes = np.unique(np.asarray(self.endocardial_nodes, dtype=int).reshape(-1))
+            nodes = np.unique(
+                _as_integer_array(self.endocardial_nodes, "endocardial_nodes").reshape(-1)
+            )
             if nodes.size and (nodes.min() < 0 or nodes.max() >= len(xyz)):
                 raise ValueError("endocardial_nodes contain out-of-range indices")
             object.__setattr__(self, "endocardial_nodes", nodes)
@@ -153,18 +180,22 @@ def _payload_to_geometry(payload: dict[str, Any], *, fallback_unit: str | None =
         electrodes = dict(zip(names, electrodes, strict=True))
     return EPGeometry(
         node_xyz_cm=np.asarray(raw["node_xyz"], dtype=float) * scale,
-        tetrahedra=np.asarray(raw["tetrahedra"], dtype=int),
+        tetrahedra=np.asarray(raw["tetrahedra"]),
         fibre=None if raw.get("fibre", raw.get("fiber")) is None else np.asarray(raw.get("fibre", raw.get("fiber")), dtype=float),
         sheet=None if raw.get("sheet") is None else np.asarray(raw["sheet"], dtype=float),
         normal=None if raw.get("normal", raw.get("sheet_normal")) is None else np.asarray(raw.get("normal", raw.get("sheet_normal")), dtype=float),
-        scar_labels=None if raw.get("scar_labels") is None else np.asarray(raw["scar_labels"], dtype=int),
+        scar_labels=None if raw.get("scar_labels") is None else np.asarray(raw["scar_labels"]),
         ventricular_coordinates={
             str(key): np.asarray(value, dtype=float)
             for key, value in dict(raw.get("ventricular_coordinates") or {}).items()
         },
         electrodes_cm={str(key): np.asarray(value, dtype=float) * scale for key, value in dict(electrodes).items()},
-        root_nodes=tuple(int(x) for x in raw.get("root_nodes", ())),
-        endocardial_nodes=None if raw.get("endocardial_nodes") is None else np.asarray(raw["endocardial_nodes"], dtype=int),
+        root_nodes=tuple(raw.get("root_nodes", ())),
+        endocardial_nodes=(
+            None
+            if raw.get("endocardial_nodes") is None
+            else np.asarray(raw["endocardial_nodes"])
+        ),
         metadata={"source_coordinate_unit": str(unit), **dict(raw.get("metadata") or {})},
     )
 
@@ -229,6 +260,7 @@ def _load_bundle(path: Path, bundle: dict[str, Any], *, fallback_unit: str | Non
     if not unit:
         raise ValueError("Could not determine volume-mesh coordinate units from the AnatomyBundle")
     volume_path = uri_to_path(str(volume["uri"]), relative_to=path.parent)
+    verify_file_sha256(volume_path, volume.get("sha256"))
     suffix = volume_path.suffix.lower()
     if suffix in {".vtk", ".vtu", ".msh"}:
         base = _meshio_geometry(volume_path, unit=str(unit))
@@ -257,7 +289,9 @@ def _load_bundle(path: Path, bundle: dict[str, Any], *, fallback_unit: str | Non
 
     fibre_art = _resolve_bundle_artifact(bundle, "fiber_field")
     if fibre_art is not None:
-        aux = _load_array(uri_to_path(str(fibre_art["uri"]), relative_to=path.parent))
+        fibre_path = uri_to_path(str(fibre_art["uri"]), relative_to=path.parent)
+        verify_file_sha256(fibre_path, fibre_art.get("sha256"))
+        aux = _load_array(fibre_path)
         if isinstance(aux, dict):
             kwargs["fibre"] = aux.get("fibre", aux.get("fiber", kwargs["fibre"]))
             kwargs["sheet"] = aux.get("sheet", kwargs["sheet"])
@@ -267,7 +301,9 @@ def _load_bundle(path: Path, bundle: dict[str, Any], *, fallback_unit: str | Non
 
     coord_art = _resolve_bundle_artifact(bundle, "coordinate_field")
     if coord_art is not None:
-        aux = _load_array(uri_to_path(str(coord_art["uri"]), relative_to=path.parent))
+        coord_path = uri_to_path(str(coord_art["uri"]), relative_to=path.parent)
+        verify_file_sha256(coord_path, coord_art.get("sha256"))
+        aux = _load_array(coord_path)
         if isinstance(aux, dict):
             kwargs["ventricular_coordinates"].update(
                 {str(key): np.asarray(value) for key, value in aux.items()}
@@ -275,7 +311,9 @@ def _load_bundle(path: Path, bundle: dict[str, Any], *, fallback_unit: str | Non
 
     scar_art = _resolve_bundle_artifact(bundle, "scar_map")
     if scar_art is not None:
-        aux = _load_array(uri_to_path(str(scar_art["uri"]), relative_to=path.parent))
+        scar_path = uri_to_path(str(scar_art["uri"]), relative_to=path.parent)
+        verify_file_sha256(scar_path, scar_art.get("sha256"))
+        aux = _load_array(scar_path)
         if isinstance(aux, dict):
             aux = aux.get("scar_labels", aux.get("labels"))
         kwargs["scar_labels"] = aux
@@ -289,6 +327,7 @@ def load_ep_geometry(ref: ArtifactRef, settings: dict[str, Any] | None = None) -
     fallback_unit = settings.get("geometry_unit") or ref.metadata.get("geometry_unit")
     if not path.is_file():
         raise FileNotFoundError(path)
+    verify_file_sha256(path, ref.sha256)
     suffix = path.suffix.lower()
     if suffix in {".vtk", ".vtu", ".msh"}:
         if not fallback_unit:
@@ -313,7 +352,7 @@ def load_ep_geometry(ref: ArtifactRef, settings: dict[str, Any] | None = None) -
         geometry = EPGeometry(
             **{
                 **geometry.__dict__,
-                "root_nodes": tuple(int(x) for x in metadata["root_nodes"]),
+                "root_nodes": tuple(metadata["root_nodes"]),
             }
         )
     return geometry
