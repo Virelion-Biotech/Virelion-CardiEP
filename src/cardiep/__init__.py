@@ -23,6 +23,7 @@ from .service import CardiEPService, ReadinessError
 from .validation import run_reference_validation, synthetic_tetra_geometry
 
 __all__ = [
+    "EPAPI",
     "EXTERNAL_ECOSYSTEM",
     "NATIVE_BACKEND_NAME",
     "ArtifactRef",
@@ -32,7 +33,6 @@ __all__ = [
     "ECGResult",
     "EPCalibrationRequest",
     "EPCalibrationResult",
-    "EPAPI",
     "EPGeometry",
     "EPObservation",
     "EPParameterSet",
