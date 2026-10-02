@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import dataclass, field
 import json
 import math
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -70,7 +70,7 @@ class ActivationProfile:
         object.__setattr__(self, "activation_ms", activation)
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "ActivationProfile":
+    def from_dict(cls, raw: dict[str, Any]) -> ActivationProfile:
         if raw.get("schema_version") != "cardiep-activation-profile-v1":
             raise ValueError(
                 "Activation profile schema_version must be 'cardiep-activation-profile-v1'"
@@ -136,7 +136,7 @@ class ActivationProfile:
         )
 
     @classmethod
-    def from_json(cls, path: str | Path) -> "ActivationProfile":
+    def from_json(cls, path: str | Path) -> ActivationProfile:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise TypeError("Activation profile JSON must contain an object")
