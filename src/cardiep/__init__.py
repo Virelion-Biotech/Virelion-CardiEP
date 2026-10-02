@@ -21,6 +21,16 @@ from .native_backend import NATIVE_BACKEND_NAME, NativeEikonalBackend
 from .propagation import PropagationResult, anisotropic_eikonal
 from .repolarization import RepolarizationResult, apd_map
 from .service import CardiEPService, ReadinessError
+from .scientific_validation import (
+    ActivationProfile,
+    AgreementThresholds,
+    ConvergenceLevel,
+    compare_activation_profiles,
+    fenicsx_beat_niederer_reference,
+    load_convergence_manifest,
+    mesh_convergence_report,
+    niederer_2011_spec,
+)
 from .validation import run_reference_validation, synthetic_tetra_geometry
 
 __all__ = [
@@ -56,6 +66,14 @@ __all__ = [
     "resolve_root_schedule",
     "run_reference_validation",
     "synthetic_tetra_geometry",
+    "ActivationProfile",
+    "AgreementThresholds",
+    "ConvergenceLevel",
+    "compare_activation_profiles",
+    "fenicsx_beat_niederer_reference",
+    "load_convergence_manifest",
+    "mesh_convergence_report",
+    "niederer_2011_spec",
     "validate_native_configuration",
 ]
 
