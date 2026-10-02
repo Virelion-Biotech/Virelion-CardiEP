@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import math
 from dataclasses import dataclass, field
@@ -164,6 +165,77 @@ class ActivationProfile:
             },
             "metadata": dict(self.metadata),
         }
+
+
+
+def activation_profile_from_csv(
+    path: str | Path,
+    *,
+    benchmark_id: str,
+    solver_name: str,
+    coordinate_unit: str = "cm",
+    time_unit: str = "ms",
+    id_column: str = "id",
+    x_column: str = "x",
+    y_column: str = "y",
+    z_column: str = "z",
+    activation_column: str = "activation",
+    solver_version: str | None = None,
+    solver_commit: str | None = None,
+    equation: str | None = None,
+    ionic_model: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ActivationProfile:
+    coord_key = str(coordinate_unit).strip().lower()
+    time_key = str(time_unit).strip().lower()
+    if coord_key not in _COORD_TO_CM:
+        raise ValueError("coordinate_unit must be one of mm, cm, m")
+    if time_key not in _TIME_TO_MS:
+        raise ValueError("time_unit must be a recognized time unit")
+
+    with Path(path).open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {
+            id_column,
+            x_column,
+            y_column,
+            z_column,
+            activation_column,
+        }
+        missing = sorted(required - set(reader.fieldnames or ()))
+        if missing:
+            raise ValueError(f"Activation CSV is missing columns: {missing}")
+        ids: list[str] = []
+        points: list[list[float]] = []
+        activation: list[float] = []
+        for row in reader:
+            sample_id = str(row[id_column]).strip()
+            if not sample_id:
+                raise ValueError("Activation CSV contains an empty sample ID")
+            ids.append(sample_id)
+            points.append(
+                [
+                    float(row[x_column]),
+                    float(row[y_column]),
+                    float(row[z_column]),
+                ]
+            )
+            activation.append(float(row[activation_column]))
+
+    if not ids:
+        raise ValueError("Activation CSV contains no rows")
+    return ActivationProfile(
+        benchmark_id=benchmark_id,
+        solver_name=solver_name,
+        solver_version=solver_version,
+        solver_commit=solver_commit,
+        equation=equation,
+        ionic_model=ionic_model,
+        sample_ids=tuple(ids),
+        points_cm=np.asarray(points, dtype=float) * _COORD_TO_CM[coord_key],
+        activation_ms=np.asarray(activation, dtype=float) * _TIME_TO_MS[time_key],
+        metadata=dict(metadata or {}),
+    )
 
 
 @dataclass(frozen=True)
