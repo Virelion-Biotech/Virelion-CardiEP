@@ -175,6 +175,8 @@ def test_observation_hash_mismatch_fails_closed(tmp_path: Path) -> None:
             uri=path.as_uri(),
             sha256="f" * 64,
         ),
+        coordinate_frame="ep_mesh_node_order",
+        units="ms",
     )
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
         evaluate_observations(
@@ -204,6 +206,8 @@ def test_calibration_rejects_initial_value_outside_bounds(tmp_path: Path) -> Non
                     kind="activation_map",
                     uri=observed.as_uri(),
                 ),
+                coordinate_frame="ep_mesh_node_order",
+                units="ms",
             )
         ],
         backend="numpy-eikonal-v1",
