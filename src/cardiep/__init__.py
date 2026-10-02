@@ -24,6 +24,7 @@ from .service import CardiEPService, ReadinessError
 from .scientific_validation import (
     ActivationProfile,
     AgreementThresholds,
+    activation_profile_from_csv,
     ConvergenceLevel,
     compare_activation_profiles,
     fenicsx_beat_niederer_reference,
@@ -69,6 +70,7 @@ __all__ = [
     "ActivationProfile",
     "AgreementThresholds",
     "ConvergenceLevel",
+    "activation_profile_from_csv",
     "compare_activation_profiles",
     "fenicsx_beat_niederer_reference",
     "load_convergence_manifest",
