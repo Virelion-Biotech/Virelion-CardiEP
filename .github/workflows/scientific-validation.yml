@@ -26,7 +26,9 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev]'
-      - run: pytest -q tests/test_scientific_validation.py
+      - run: pytest -q tests/test_scientific_validation.py tests/test_propagation.py
+      - name: Verify native Eikonal mesh refinement
+        run: cardiep validate-eikonal-convergence
       - name: Emit benchmark and pinned reference
         run: |
           cardiep niederer-spec --output /tmp/niederer-spec.json

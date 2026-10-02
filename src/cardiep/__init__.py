@@ -32,7 +32,11 @@ from .scientific_validation import (
     niederer_2011_spec,
 )
 from .service import CardiEPService, ReadinessError
-from .validation import run_reference_validation, synthetic_tetra_geometry
+from .validation import (
+    run_eikonal_refinement_validation,
+    run_reference_validation,
+    synthetic_tetra_geometry,
+)
 
 __all__ = [
     "EPAPI",
@@ -74,6 +78,7 @@ __all__ = [
     "observations_from_electrotrace",
     "pseudo_ecg",
     "resolve_root_schedule",
+    "run_eikonal_refinement_validation",
     "run_reference_validation",
     "synthetic_tetra_geometry",
     "validate_native_configuration",

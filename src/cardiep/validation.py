@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 
 from .conduction import RootSchedule
@@ -114,5 +116,133 @@ def run_reference_validation() -> dict:
         "scientific_boundary": (
             "These checks validate implementation invariants only; they do not establish "
             "physiological, clinical, or numerical equivalence to monodomain/bidomain solvers."
+        ),
+    }
+
+
+
+def _structured_cube_geometry(n: int) -> EPGeometry:
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise ValueError("Structured refinement level must be a positive integer")
+    index: dict[tuple[int, int, int], int] = {}
+    points: list[list[float]] = []
+    counter = 0
+    for i in range(n + 1):
+        for j in range(n + 1):
+            for k in range(n + 1):
+                index[(i, j, k)] = counter
+                points.append([i / n, j / n, k / n])
+                counter += 1
+
+    tetrahedra: list[list[int]] = []
+    for i in range(n):
+        for j in range(n):
+            for k in range(n):
+                v000 = index[(i, j, k)]
+                v100 = index[(i + 1, j, k)]
+                v010 = index[(i, j + 1, k)]
+                v001 = index[(i, j, k + 1)]
+                v110 = index[(i + 1, j + 1, k)]
+                v101 = index[(i + 1, j, k + 1)]
+                v011 = index[(i, j + 1, k + 1)]
+                v111 = index[(i + 1, j + 1, k + 1)]
+                tetrahedra.extend(
+                    [
+                        [v000, v100, v110, v111],
+                        [v000, v100, v101, v111],
+                        [v000, v010, v110, v111],
+                        [v000, v010, v011, v111],
+                        [v000, v001, v101, v111],
+                        [v000, v001, v011, v111],
+                    ]
+                )
+    return EPGeometry(
+        node_xyz_cm=np.asarray(points, dtype=float),
+        tetrahedra=np.asarray(tetrahedra, dtype=int),
+        root_nodes=(0,),
+        metadata={"fixture": "structured-unit-cube", "refinement_n": n},
+    )
+
+
+def run_eikonal_refinement_validation(
+    *,
+    levels: tuple[int, ...] = (4, 8),
+) -> dict:
+    if len(levels) < 2:
+        raise ValueError("At least two refinement levels are required")
+    if any(level % 4 != 0 for level in levels):
+        raise ValueError(
+            "Default off-axis target requires refinement levels divisible by 4"
+        )
+    if any(later <= earlier for earlier, later in pairwise(levels)):
+        raise ValueError("Refinement levels must be strictly increasing")
+
+    target = np.asarray([1.0, 0.5, 0.25], dtype=float)
+    exact_ms = float(np.linalg.norm(target))
+    rows = []
+    errors = []
+    roots = RootSchedule(
+        nodes=np.asarray([0]),
+        activation_ms=np.asarray([0.0]),
+        method="analytic-refinement",
+    )
+    for level in levels:
+        geometry = _structured_cube_geometry(level)
+        index = int(
+            np.argmin(
+                np.linalg.norm(
+                    geometry.node_xyz_cm - target[None, :],
+                    axis=1,
+                )
+            )
+        )
+        if not np.allclose(geometry.node_xyz_cm[index], target):
+            raise RuntimeError("Refinement mesh did not contain the analytic target")
+        result = anisotropic_eikonal(
+            geometry,
+            roots,
+            {"isotropic_speed": 1.0},
+        )
+        observed_ms = float(result.activation_ms[index])
+        error_ms = abs(observed_ms - exact_ms)
+        errors.append(error_ms)
+        rows.append(
+            {
+                "n": int(level),
+                "h_cm": 1.0 / level,
+                "n_nodes": int(geometry.n_nodes),
+                "n_tetrahedra": len(geometry.tetrahedra),
+                "activation_ms": observed_ms,
+                "exact_ms": exact_ms,
+                "absolute_error_ms": error_ms,
+            }
+        )
+
+    monotone = all(
+        later < earlier
+        for earlier, later in pairwise(errors)
+    )
+    reduction_ratio = errors[-1] / max(errors[0], 1e-15)
+    passed = bool(
+        monotone
+        and reduction_ratio < 0.8
+        and errors[-1] < 0.04
+    )
+    return {
+        "passed": passed,
+        "validation_status": "numerical_refinement_check",
+        "benchmark": "isotropic-unit-cube-off-axis",
+        "target_cm": target.tolist(),
+        "isotropic_speed_cm_per_ms": 1.0,
+        "levels": rows,
+        "metrics": {
+            "monotone_error_reduction": monotone,
+            "fine_over_coarse_error_ratio": reduction_ratio,
+            "fine_absolute_error_ms": errors[-1],
+        },
+        "scientific_boundary": (
+            "This manufactured isotropic refinement study verifies that the native "
+            "tetrahedral Eikonal discretization reduces off-axis numerical error. It "
+            "does not establish equivalence to monodomain/bidomain electrophysiology."
         ),
     }

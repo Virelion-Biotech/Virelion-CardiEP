@@ -15,6 +15,7 @@ from .scientific_validation import (
     mesh_convergence_report,
     niederer_2011_spec,
 )
+from .validation import run_eikonal_refinement_validation
 
 
 def _load_payload(path: str) -> dict:
@@ -53,6 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser(
         "validate-reference",
         help="Run deterministic reference checks for the native fast EP engine",
+    )
+    sub.add_parser(
+        "validate-eikonal-convergence",
+        help="Run the manufactured off-axis tetrahedral Eikonal refinement check",
     )
 
     spec = sub.add_parser(
@@ -131,6 +136,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "validate-reference":
         result = api.validate_reference()
+        _print(result)
+        return 0 if result["passed"] else 2
+    if args.command == "validate-eikonal-convergence":
+        result = run_eikonal_refinement_validation()
         _print(result)
         return 0 if result["passed"] else 2
     if args.command == "niederer-spec":
