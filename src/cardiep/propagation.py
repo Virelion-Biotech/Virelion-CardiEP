@@ -19,7 +19,9 @@ class PropagationResult:
 
 
 def _speed(parameters: dict[str, float], name: str, default: float) -> float:
-    aliases = (name, f"{name}_cm_per_ms")
+    aliases = [name, f"{name}_cm_per_ms"]
+    if name == "fibre_speed":
+        aliases.extend(["fiber_speed", "fiber_speed_cm_per_ms"])
     value = next((parameters[key] for key in aliases if key in parameters), default)
     value = float(value)
     if not np.isfinite(value) or value <= 0:
