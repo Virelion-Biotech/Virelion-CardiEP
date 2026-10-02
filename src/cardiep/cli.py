@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 from .api import EPAPI
-from .validation import run_eikonal_refinement_validation
 from .scientific_validation import (
     ActivationProfile,
     AgreementThresholds,
@@ -16,6 +15,7 @@ from .scientific_validation import (
     mesh_convergence_report,
     niederer_2011_spec,
 )
+from .validation import run_eikonal_refinement_validation
 
 
 def _load_payload(path: str) -> dict:
