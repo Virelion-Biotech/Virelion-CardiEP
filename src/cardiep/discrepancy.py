@@ -323,11 +323,65 @@ def ecg_discrepancy(
     return float(weighted_sum / weight_sum)
 
 
-def _field_values(raw: dict[str, Any], *keys: str) -> np.ndarray:
+_TIME_UNIT_TO_MS = {
+    "ms": 1.0,
+    "millisecond": 1.0,
+    "milliseconds": 1.0,
+    "s": 1000.0,
+    "sec": 1000.0,
+    "second": 1000.0,
+    "seconds": 1000.0,
+    "us": 0.001,
+    "µs": 0.001,
+    "μs": 0.001,
+    "microsecond": 0.001,
+    "microseconds": 0.001,
+}
+
+
+def _field_values(raw: dict[str, Any], *keys: str) -> tuple[np.ndarray, str]:
     for key in keys:
         if key in raw:
-            return np.asarray(raw[key], dtype=float).reshape(-1)
+            return np.asarray(raw[key], dtype=float).reshape(-1), key
     raise ValueError(f"Observation artifact is missing one of fields: {', '.join(keys)}")
+
+
+def _time_field_ms(
+    raw: dict[str, Any],
+    observation: EPObservation,
+    *keys: str,
+) -> np.ndarray:
+    values, key = _field_values(raw, *keys)
+    declared = observation.units or raw.get("units")
+    implied_ms = key.endswith("_ms") or key == "values_ms"
+
+    if implied_ms:
+        if declared is not None:
+            unit = str(declared).strip().lower()
+            if unit not in _TIME_UNIT_TO_MS:
+                raise ValueError(
+                    f"Unsupported time unit for {observation.observation_id!r}: {declared!r}"
+                )
+            if _TIME_UNIT_TO_MS[unit] != 1.0:
+                raise ValueError(
+                    f"Observation {observation.observation_id!r} field {key!r} implies ms "
+                    f"but declared units are {declared!r}"
+                )
+        return values
+
+    if declared is None:
+        raise ValueError(
+            f"Observation {observation.observation_id!r} uses generic field {key!r} "
+            "and must declare time units"
+        )
+    unit = str(declared).strip().lower()
+    try:
+        factor = _TIME_UNIT_TO_MS[unit]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported time unit for {observation.observation_id!r}: {declared!r}"
+        ) from exc
+    return values * factor
 
 
 def field_discrepancy(observed: np.ndarray, simulated: np.ndarray, metric: str) -> float:
@@ -446,10 +500,22 @@ def evaluate_observations(
                 raise ValueError("Observed QRS duration must be finite")
             value = abs(predicted - observed_value) / sigma
         elif output == "activation_map":
-            observed = _field_values(raw, "activation_ms", "values_ms", "values")
+            observed = _time_field_ms(
+                raw,
+                observation,
+                "activation_ms",
+                "values_ms",
+                "values",
+            )
             value = field_discrepancy(observed, activation_ms, metric)
         elif output == "repolarization_map":
-            observed = _field_values(raw, "repolarization_ms", "values_ms", "values")
+            observed = _time_field_ms(
+                raw,
+                observation,
+                "repolarization_ms",
+                "values_ms",
+                "values",
+            )
             value = field_discrepancy(observed, repolarization_ms, metric)
         else:
             raise ValueError(f"Unsupported CardiEP model_output in discrepancy term: {output}")
