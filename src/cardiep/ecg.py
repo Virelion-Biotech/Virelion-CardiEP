@@ -17,6 +17,8 @@ class ECGResult:
     sample_rate_hz: float
     model: str
     units: str = "a.u."
+    reference_time_ms: float | None = None
+    reference_method: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -26,6 +28,8 @@ class ECGResult:
             "sample_rate_hz": self.sample_rate_hz,
             "model": self.model,
             "units": self.units,
+            "reference_time_ms": self.reference_time_ms,
+            "reference_method": self.reference_method,
         }
 
 
@@ -56,6 +60,7 @@ def pseudo_ecg(
     qrs_sigma_ms: float = 5.0,
     t_sigma_ms: float = 20.0,
     repolarization_scale: float = 0.55,
+    pre_activation_ms: float = 250.0,
     chunk_size: int = 2048,
 ) -> ECGResult:
     if not geometry.electrodes_cm:
@@ -67,6 +72,7 @@ def pseudo_ecg(
         "qrs_sigma_ms": qrs_sigma_ms,
         "t_sigma_ms": t_sigma_ms,
         "repolarization_scale": repolarization_scale,
+        "pre_activation_ms": pre_activation_ms,
     }
     if any(not np.isfinite(float(value)) for value in scalars.values()):
         raise ValueError("ECG numerical settings must be finite")
@@ -74,6 +80,8 @@ def pseudo_ecg(
         raise ValueError("ECG sampling rate and temporal widths must be positive")
     if repolarization_scale < 0:
         raise ValueError("repolarization_scale must be non-negative")
+    if pre_activation_ms < 0:
+        raise ValueError("pre_activation_ms must be non-negative")
     activation = np.asarray(activation_ms, dtype=float)
     repolarization = np.asarray(repolarization_ms, dtype=float)
     if activation.shape != (geometry.n_nodes,) or repolarization.shape != (geometry.n_nodes,):
@@ -87,10 +95,11 @@ def pseudo_ecg(
         if duration_ms is not None
         else float(np.max(repolarization) + 80.0)
     )
-    if not np.isfinite(end_ms) or end_ms <= 0:
-        raise ValueError("ECG duration must be positive and finite")
+    start_ms = float(np.min(activation) - pre_activation_ms)
+    if not np.isfinite(end_ms) or end_ms <= start_ms:
+        raise ValueError("ECG end time must be finite and later than its start time")
     dt_ms = 1000.0 / float(sample_rate_hz)
-    time = np.arange(0.0, end_ms + 0.5 * dt_ms, dt_ms, dtype=float)
+    time = np.arange(start_ms, end_ms + 0.5 * dt_ms, dt_ms, dtype=float)
 
     names = list(geometry.electrodes_cm)
     electrode_xyz = np.stack([geometry.electrodes_cm[name] for name in names], axis=0)
@@ -142,10 +151,27 @@ def pseudo_ecg(
     values = values - values[:, :1]
     max_abs = float(np.max(np.abs(values)))
     values = values / max(max_abs, 1e-12)
+
+    qrs_start = float(np.min(activation) - 4.0 * qrs_sigma_ms)
+    qrs_end = float(np.max(activation) + 4.0 * qrs_sigma_ms)
+    qrs_mask = (time >= qrs_start) & (time <= qrs_end)
+    if not np.any(qrs_mask):
+        raise ValueError("Pseudo-ECG time grid does not cover the ventricular activation window")
+    qrs_energy = np.sqrt(np.mean(values[:, qrs_mask] ** 2, axis=0))
+    qrs_times = time[qrs_mask]
+    if np.max(qrs_energy) <= 1e-12:
+        reference_time_ms = float(np.median(activation))
+        reference_method = "median_activation_fallback"
+    else:
+        reference_time_ms = float(qrs_times[int(np.argmax(qrs_energy))])
+        reference_method = "max_multilead_rms_within_activation_window"
+
     return ECGResult(
         lead_names=tuple(lead_names),
         time_ms=time,
         values=values,
         sample_rate_hz=float(sample_rate_hz),
         model="inverse-distance nodal dipole proxy",
+        reference_time_ms=reference_time_ms,
+        reference_method=reference_method,
     )
