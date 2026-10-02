@@ -8,6 +8,7 @@ from cardiep import (
     ActivationProfile,
     AgreementThresholds,
     ConvergenceLevel,
+    activation_profile_from_csv,
     compare_activation_profiles,
     fenicsx_beat_niederer_reference,
     mesh_convergence_report,
@@ -199,3 +200,29 @@ def test_mesh_convergence_requires_common_benchmark() -> None:
     ]
     with pytest.raises(ValueError, match="same benchmark"):
         mesh_convergence_report(levels)
+
+
+
+def test_external_solver_csv_adapter_normalizes_units(tmp_path: Path) -> None:
+    csv_path = tmp_path / "activation.csv"
+    csv_path.write_text(
+        "node,x_mm,y_mm,z_mm,lat_s\n"
+        "P1,0,0,0,0.001\n"
+        "P8,20,7,3,0.038\n",
+        encoding="utf-8",
+    )
+    profile = activation_profile_from_csv(
+        csv_path,
+        benchmark_id="niederer-2011",
+        solver_name="external-pde",
+        coordinate_unit="mm",
+        time_unit="s",
+        id_column="node",
+        x_column="x_mm",
+        y_column="y_mm",
+        z_column="z_mm",
+        activation_column="lat_s",
+    )
+    assert profile.sample_ids == ("P1", "P8")
+    assert profile.points_cm[1].tolist() == pytest.approx([2.0, 0.7, 0.3])
+    assert profile.activation_ms.tolist() == pytest.approx([1.0, 38.0])
