@@ -2,6 +2,7 @@
 
 from .api import EPAPI
 from .conduction import RootSchedule, resolve_root_schedule
+from .configuration import validate_native_configuration
 from .discrepancy import DiscrepancyReport, DiscrepancyTerm, evaluate_observations
 from .ecg import ECGResult, pseudo_ecg
 from .external import EXTERNAL_ECOSYSTEM, ExternalBackendDescriptor, SubprocessEPBackend
@@ -55,6 +56,7 @@ __all__ = [
     "resolve_root_schedule",
     "run_reference_validation",
     "synthetic_tetra_geometry",
+    "validate_native_configuration",
 ]
 
 __version__ = "0.2.0"

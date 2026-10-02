@@ -8,6 +8,7 @@ import numpy as np
 
 from .artifacts import write_json_artifact
 from .conduction import resolve_root_schedule
+from .configuration import validate_native_configuration
 from .discrepancy import DiscrepancyReport, evaluate_observations
 from .ecg import ECGResult, pseudo_ecg
 from .geometry import EPGeometry, load_ep_geometry
@@ -56,6 +57,7 @@ class NativeEikonalBackend:
         settings: dict[str, Any],
     ) -> NativeSimulation:
         geometry = load_ep_geometry(anatomy_ref, settings)
+        validate_native_configuration(geometry, settings, parameters)
         roots = resolve_root_schedule(geometry, settings, parameters)
         propagation = anisotropic_eikonal(geometry, roots, parameters)
         repolarization = apd_map(geometry, propagation.activation_ms, parameters)
