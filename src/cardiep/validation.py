@@ -95,6 +95,11 @@ def run_reference_validation() -> dict:
             np.all(repolarization.repolarization_ms > anisotropic.activation_ms)
         ),
         "standard_12_lead_shape": ecg_a.values.shape[0] == 12,
+        "pre_activation_baseline": bool(ecg_a.time_ms[0] < np.min(anisotropic.activation_ms)),
+        "qrs_reference_present": bool(
+            ecg_a.reference_time_ms is not None
+            and np.isfinite(ecg_a.reference_time_ms)
+        ),
         "deterministic_pseudo_ecg": deterministic_error == 0.0,
     }
     return {
