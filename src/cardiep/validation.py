@@ -172,7 +172,7 @@ def run_eikonal_refinement_validation(
         raise ValueError(
             "Default off-axis target requires refinement levels divisible by 4"
         )
-    if any(later <= earlier for earlier, later in zip(levels, levels[1:], strict=True)):
+    if any(later <= earlier for earlier, later in zip(levels, levels[1:])):
         raise ValueError("Refinement levels must be strictly increasing")
 
     target = np.asarray([1.0, 0.5, 0.25], dtype=float)
@@ -218,7 +218,7 @@ def run_eikonal_refinement_validation(
 
     monotone = all(
         later < earlier
-        for earlier, later in zip(errors, errors[1:], strict=True)
+        for earlier, later in zip(errors, errors[1:])
     )
     reduction_ratio = errors[-1] / max(errors[0], 1e-15)
     passed = bool(
