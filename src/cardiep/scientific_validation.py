@@ -9,7 +9,6 @@ from typing import Any, Literal
 
 import numpy as np
 
-
 _COORD_TO_CM = {"cm": 1.0, "mm": 0.1, "m": 100.0}
 _TIME_TO_MS = {
     "ms": 1.0,
