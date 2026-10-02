@@ -20,7 +20,7 @@ from .models import (
     EPSimulationResult,
 )
 from .propagation import PropagationResult, anisotropic_eikonal
-from .provenance import sha256_json
+from .provenance import native_runtime_fingerprint, sha256_json
 from .repolarization import RepolarizationResult, apd_map
 
 NATIVE_BACKEND_NAME = "numpy-eikonal-v1"
@@ -107,10 +107,17 @@ class NativeEikonalBackend:
     ) -> EPSimulationResult:
         request_json = request.model_dump(mode="json")
         request_sha = sha256_json(request_json)
-        output_dir = self._output_dir(request.subject_id, request_sha, request.settings)
+        runtime = native_runtime_fingerprint()
+        run_sha = sha256_json(
+            {
+                "request_sha256": request_sha,
+                "runtime": runtime,
+            }
+        )
+        output_dir = self._output_dir(request.subject_id, run_sha, request.settings)
         activation = write_json_artifact(
             output_dir,
-            artifact_id=f"{request.subject_id}-activation-{request_sha[:12]}",
+            artifact_id=f"{request.subject_id}-activation-{run_sha[:12]}",
             kind="activation_map",
             payload={
                 "schema_version": "cardiep-field-v1",
@@ -125,7 +132,7 @@ class NativeEikonalBackend:
         )
         repolarization = write_json_artifact(
             output_dir,
-            artifact_id=f"{request.subject_id}-repolarization-{request_sha[:12]}",
+            artifact_id=f"{request.subject_id}-repolarization-{run_sha[:12]}",
             kind="repolarization_map",
             payload={
                 "schema_version": "cardiep-field-v1",
@@ -142,7 +149,7 @@ class NativeEikonalBackend:
             outputs.append(
                 write_json_artifact(
                     output_dir,
-                    artifact_id=f"{request.subject_id}-ecg-{request_sha[:12]}",
+                    artifact_id=f"{request.subject_id}-ecg-{run_sha[:12]}",
                     kind="pseudo_ecg",
                     payload={
                         "schema_version": "cardiep-ecg-v1",
@@ -157,13 +164,15 @@ class NativeEikonalBackend:
             )
         summary = write_json_artifact(
             output_dir,
-            artifact_id=f"{request.subject_id}-ep-summary-{request_sha[:12]}",
+            artifact_id=f"{request.subject_id}-ep-summary-{run_sha[:12]}",
             kind="ep_summary",
             payload={
                 "schema_version": "cardiep-summary-v1",
                 "subject_id": request.subject_id,
                 "backend": self.name,
                 "request_sha256": request_sha,
+                "run_sha256": run_sha,
+                "runtime": runtime,
                 "geometry": simulation.geometry.summary(),
                 "propagation": {
                     "activation_min_ms": float(np.min(simulation.propagation.activation_ms)),
@@ -195,6 +204,10 @@ class NativeEikonalBackend:
                 "engine": "Virelion-CardiEP",
                 "backend": self.name,
                 "request_sha256": request_sha,
+                "run_sha256": run_sha,
+                "implementation_sha256": runtime["source_sha256"],
+                "runtime_fingerprint_sha256": runtime["fingerprint_sha256"],
+                "runtime": runtime,
                 "anatomy_artifact_id": request.anatomy_ref.artifact_id,
                 "root_method": simulation.propagation.root_schedule.method,
                 "scientific_status": "integration/reference model; not clinically validated",
@@ -316,6 +329,11 @@ class NativeEikonalBackend:
                 "engine": "Virelion-CardiEP",
                 "backend": self.name,
                 "calibration_method": "bounded-coordinate-pattern-search",
+                "simulation_run_sha256": (
+                    simulated.provenance.get("run_sha256")
+                    if simulated is not None
+                    else None
+                ),
                 "scientific_status": "deterministic reference optimizer; not posterior inference",
             },
         )
