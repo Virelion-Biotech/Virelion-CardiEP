@@ -74,15 +74,15 @@ def resolve_root_schedule(
     raw_nodes = settings.get("root_nodes")
     method = "explicit"
     if raw_nodes is None:
-        if geometry.root_nodes:
-            raw_nodes = list(geometry.root_nodes)
-            method = "geometry"
-        elif "auto_root_count" in settings:
+        if "auto_root_count" in settings:
             raw_nodes = _farthest_point_roots(
                 geometry,
                 _positive_integer(settings["auto_root_count"], "auto_root_count"),
             ).tolist()
             method = "endocardial-farthest-point-heuristic"
+        elif geometry.root_nodes:
+            raw_nodes = list(geometry.root_nodes)
+            method = "geometry"
         else:
             raise ValueError(
                 "No ventricular activation roots supplied. Provide settings.root_nodes, "
