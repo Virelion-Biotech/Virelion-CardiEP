@@ -8,6 +8,7 @@ from .api import EPAPI
 from .scientific_validation import (
     ActivationProfile,
     AgreementThresholds,
+    activation_profile_from_csv,
     compare_activation_profiles,
     fenicsx_beat_niederer_reference,
     load_convergence_manifest,
@@ -84,6 +85,27 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--point-tolerance-cm", type=float, default=1e-6)
     compare.add_argument("--output")
 
+
+    profile_csv = sub.add_parser(
+        "profile-from-csv",
+        help="Convert an external solver activation CSV into the canonical profile contract",
+    )
+    profile_csv.add_argument("input")
+    profile_csv.add_argument("output")
+    profile_csv.add_argument("--benchmark-id", required=True)
+    profile_csv.add_argument("--solver-name", required=True)
+    profile_csv.add_argument("--solver-version")
+    profile_csv.add_argument("--solver-commit")
+    profile_csv.add_argument("--equation")
+    profile_csv.add_argument("--ionic-model")
+    profile_csv.add_argument("--coordinate-unit", default="cm")
+    profile_csv.add_argument("--time-unit", default="ms")
+    profile_csv.add_argument("--id-column", default="id")
+    profile_csv.add_argument("--x-column", default="x")
+    profile_csv.add_argument("--y-column", default="y")
+    profile_csv.add_argument("--z-column", default="z")
+    profile_csv.add_argument("--activation-column", default="activation")
+
     convergence = sub.add_parser(
         "validate-convergence",
         help="Evaluate a cardiep-convergence-manifest-v1 mesh-convergence study",
@@ -150,6 +172,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         _write_or_print(report, args.output)
         return 2 if report["status"] == "fail" else 0
+
+    if args.command == "profile-from-csv":
+        profile = activation_profile_from_csv(
+            args.input,
+            benchmark_id=args.benchmark_id,
+            solver_name=args.solver_name,
+            solver_version=args.solver_version,
+            solver_commit=args.solver_commit,
+            equation=args.equation,
+            ionic_model=args.ionic_model,
+            coordinate_unit=args.coordinate_unit,
+            time_unit=args.time_unit,
+            id_column=args.id_column,
+            x_column=args.x_column,
+            y_column=args.y_column,
+            z_column=args.z_column,
+            activation_column=args.activation_column,
+        )
+        _write_or_print(profile.to_dict(), args.output)
+        return 0
     if args.command == "validate-convergence":
         levels, exact = load_convergence_manifest(args.manifest)
         report = mesh_convergence_report(levels, exact=exact)
