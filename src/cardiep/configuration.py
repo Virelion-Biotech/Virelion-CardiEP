@@ -41,6 +41,7 @@ _NATIVE_SETTINGS = {
     "purkinje_root_distance_cm",
     "with_ecg",
     "ecg_sample_rate_hz",
+    "ecg_pre_activation_ms",
     "duration_ms",
     "qrs_sigma_ms",
     "t_sigma_ms",
@@ -192,6 +193,11 @@ def validate_native_configuration(
         value = float(settings["repolarization_scale"])
         if not math.isfinite(value) or value < 0:
             raise ValueError("repolarization_scale must be non-negative and finite")
+
+    if "ecg_pre_activation_ms" in settings:
+        value = float(settings["ecg_pre_activation_ms"])
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("ecg_pre_activation_ms must be non-negative and finite")
 
     if "max_iterations" in settings:
         value = settings["max_iterations"]
