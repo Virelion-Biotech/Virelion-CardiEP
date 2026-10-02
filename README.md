@@ -205,6 +205,39 @@ Discrepancy
     └── CardiInfer posterior inference
 ```
 
+
+## Scientific validation tier
+
+CardiEP now includes a solver-neutral numerical validation layer around the native engine and external PDE backends:
+
+- canonical activation-profile JSON with strict units and sample-point identity;
+- the Niederer 2011 N-version benchmark specification;
+- a pinned FEniCSx-beat 0.7.0 interoperability fixture;
+- CSV ingestion for openCARP, MonoAlg3D, FEniCSx-beat or other solver post-processing;
+- cross-solver RMSE/MAE/max-error/bias/limits-of-agreement/correlation/regression metrics;
+- explicit, configurable acceptance gates;
+- mesh self-convergence, observed order and fine-grid GCI-style estimates.
+
+Examples:
+
+```bash
+cardiep niederer-spec --output niederer.json
+cardiep niederer-fenicsx-reference --output fenicsx-reference.json
+
+cardiep profile-from-csv openCARP.csv opencarp.json \
+  --benchmark-id niederer-2011 \
+  --solver-name openCARP \
+  --coordinate-unit mm --time-unit ms \
+  --x-column x_mm --y-column y_mm --z-column z_mm \
+  --activation-column activation_ms
+
+cardiep compare-activation fenicsx-reference.json opencarp.json \
+  --rmse-ms-max 2 --max-abs-ms-max 5 \
+  --correlation-min 0.995 --abs-bias-ms-max 2
+```
+
+See `docs/SCIENTIFIC_VALIDATION.md` for the cross-solver, convergence, provenance and claim-boundary protocol. Passing these numerical checks does **not** establish physiological or clinical validity.
+
 ## Scientific boundary
 
 The built-in pseudo-ECG is an inverse-distance nodal-dipole proxy in arbitrary normalized units. The built-in propagation model is graph-based Eikonal propagation. Both are useful for fast digital-twin plumbing and inverse-loop screening, but neither establishes clinical validity.
