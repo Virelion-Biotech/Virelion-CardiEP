@@ -202,7 +202,88 @@ def _align_simulated_ecg(
     )
 
 
-def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> float:
+def _ecg_lead_weights(
+    raw: dict[str, Any],
+    leads: list[str],
+    *,
+    mode: str,
+) -> dict[str, float]:
+    if mode not in {"auto", "equal", "quality_score", "inverse_noise_variance"}:
+        raise ValueError(
+            "ECG lead_weighting must be one of: auto, equal, "
+            "quality_score, inverse_noise_variance"
+        )
+    if mode == "equal":
+        return {lead: 1.0 for lead in leads}
+
+    quality = raw.get("quality")
+    quality_map = None
+    if isinstance(quality, dict):
+        quality_map = quality.get("lead_quality")
+    if quality_map is not None:
+        if not isinstance(quality_map, dict):
+            raise TypeError("ECG quality.lead_quality must be a mapping")
+        scores: dict[str, float] = {}
+        for lead in leads:
+            entry = quality_map.get(lead)
+            if not isinstance(entry, dict) or "quality_score" not in entry:
+                raise ValueError(f"ECG quality_score is missing for lead {lead!r}")
+            score = float(entry["quality_score"])
+            if not np.isfinite(score) or not 0.0 <= score <= 1.0:
+                raise ValueError(
+                    f"ECG quality_score for lead {lead!r} must be finite and in [0, 1]"
+                )
+            scores[lead] = score
+        if mode in {"auto", "quality_score"}:
+            if sum(scores.values()) <= 0.0:
+                raise ValueError("All common ECG leads have zero quality weight")
+            return scores
+    elif mode == "quality_score":
+        raise ValueError("ECG quality_score weighting was requested but quality metadata is absent")
+
+    uncertainty = raw.get("uncertainty")
+    sigma_map = None
+    if isinstance(uncertainty, dict):
+        sigma_map = uncertainty.get("noise_sigma_by_lead")
+    if sigma_map is not None:
+        if not isinstance(sigma_map, dict):
+            raise TypeError("ECG uncertainty.noise_sigma_by_lead must be a mapping")
+        sigmas: dict[str, float] = {}
+        for lead in leads:
+            if lead not in sigma_map:
+                raise ValueError(f"ECG noise sigma is missing for lead {lead!r}")
+            sigma = float(sigma_map[lead])
+            if not np.isfinite(sigma) or sigma < 0.0:
+                raise ValueError(
+                    f"ECG noise sigma for lead {lead!r} must be finite and non-negative"
+                )
+            sigmas[lead] = sigma
+        if mode in {"auto", "inverse_noise_variance"}:
+            positive = [sigma for sigma in sigmas.values() if sigma > 0.0]
+            if not positive:
+                return {lead: 1.0 for lead in leads}
+            floor = max(min(positive) * 0.1, np.finfo(float).eps)
+            raw_weights = {
+                lead: 1.0 / max(sigma, floor) ** 2
+                for lead, sigma in sigmas.items()
+            }
+            scale = max(raw_weights.values())
+            return {lead: value / scale for lead, value in raw_weights.items()}
+    elif mode == "inverse_noise_variance":
+        raise ValueError(
+            "Inverse-noise ECG weighting was requested but uncertainty metadata is absent"
+        )
+
+    return {lead: 1.0 for lead in leads}
+
+
+def ecg_discrepancy(
+    raw: dict[str, Any],
+    simulated: ECGResult,
+    metric: str,
+    *,
+    lead_weighting: str = "auto",
+) -> float:
     _, observed = _ecg_leads(raw)
     simulated_by_lead = {
         name: simulated.values[i] for i, name in enumerate(simulated.lead_names)
@@ -222,16 +303,24 @@ def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> f
     if metric not in metrics:
         raise ValueError(f"Unsupported ECG discrepancy metric: {metric}")
 
-    values = []
+    lead_weights = _ecg_lead_weights(raw, common, mode=lead_weighting)
+    weighted_sum = 0.0
+    weight_sum = 0.0
     for name in common:
+        reliability = float(lead_weights[name])
+        if reliability <= 0.0:
+            continue
         aligned = _align_simulated_ecg(
             raw,
             observed[name],
             simulated,
             simulated_by_lead[name],
         )
-        values.append(metrics[metric](observed[name], aligned))
-    return float(np.mean(values))
+        weighted_sum += reliability * metrics[metric](observed[name], aligned)
+        weight_sum += reliability
+    if weight_sum <= 0.0:
+        raise ValueError("No positively weighted common ECG leads remain")
+    return float(weighted_sum / weight_sum)
 
 
 def _field_values(raw: dict[str, Any], *keys: str) -> np.ndarray:
@@ -336,7 +425,12 @@ def evaluate_observations(
         if output == "ecg":
             if ecg is None:
                 raise ValueError("ECG discrepancy requested but pseudo-ECG generation is unavailable")
-            value = ecg_discrepancy(raw, ecg, metric)
+            value = ecg_discrepancy(
+                raw,
+                ecg,
+                metric,
+                lead_weighting=str(metadata.get("lead_weighting", "auto")),
+            )
         elif output == "qrs_duration_ms":
             observed_value = metadata.get("observed_value_ms")
             if observed_value is None:

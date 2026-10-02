@@ -76,3 +76,85 @@ def test_ecg_time_axis_must_match_template_and_be_monotonic() -> None:
     }
     with pytest.raises(ValueError, match="strictly increasing"):
         ecg_discrepancy(nonmonotonic, simulated, "correlation")
+
+
+
+def test_ecg_quality_scores_weight_morphology_discrepancy() -> None:
+    signal = np.asarray([0.0, 1.0, 0.0, -1.0, 0.0])
+    raw = {
+        "lead_names": ["I", "II"],
+        "beat_template": {
+            "I": signal.tolist(),
+            "II": signal.tolist(),
+        },
+        "quality": {
+            "lead_quality": {
+                "I": {"quality_score": 1.0},
+                "II": {"quality_score": 0.0},
+            }
+        },
+    }
+    simulated = ECGResult(
+        lead_names=("I", "II"),
+        time_ms=np.arange(5, dtype=float),
+        values=np.stack([signal, -signal]),
+        sample_rate_hz=1000.0,
+        model="test",
+    )
+    weighted = ecg_discrepancy(raw, simulated, "correlation")
+    equal = ecg_discrepancy(
+        raw,
+        simulated,
+        "correlation",
+        lead_weighting="equal",
+    )
+    assert weighted == pytest.approx(0.0, abs=1e-12)
+    assert equal == pytest.approx(1.0, abs=1e-12)
+
+
+def test_ecg_noise_weighting_falls_back_when_quality_scores_absent() -> None:
+    signal = np.asarray([0.0, 1.0, 0.0, -1.0, 0.0])
+    raw = {
+        "lead_names": ["I", "II"],
+        "beat_template": {
+            "I": signal.tolist(),
+            "II": signal.tolist(),
+        },
+        "uncertainty": {
+            "noise_sigma_by_lead": {
+                "I": 0.1,
+                "II": 1.0,
+            }
+        },
+    }
+    simulated = ECGResult(
+        lead_names=("I", "II"),
+        time_ms=np.arange(5, dtype=float),
+        values=np.stack([signal, -signal]),
+        sample_rate_hz=1000.0,
+        model="test",
+    )
+    weighted = ecg_discrepancy(raw, simulated, "correlation")
+    assert weighted < 0.05
+
+
+def test_ecg_quality_metadata_fails_closed_when_malformed() -> None:
+    signal = np.asarray([0.0, 1.0, 0.0, -1.0, 0.0])
+    raw = {
+        "lead_names": ["I"],
+        "beat_template": {"I": signal.tolist()},
+        "quality": {
+            "lead_quality": {
+                "I": {"quality_score": 1.5},
+            }
+        },
+    }
+    simulated = ECGResult(
+        lead_names=("I",),
+        time_ms=np.arange(5, dtype=float),
+        values=signal[None, :],
+        sample_rate_hz=1000.0,
+        model="test",
+    )
+    with pytest.raises(ValueError, match="quality_score"):
+        ecg_discrepancy(raw, simulated, "correlation")
