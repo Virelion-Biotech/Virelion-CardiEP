@@ -49,6 +49,23 @@ class EPObservation(BaseModel):
     units: str | None = None
     acquired_at: str | None = None
 
+    @model_validator(mode="after")
+    def validate_spatial_map_semantics(self) -> EPObservation:
+        if self.kind in {"eam_activation", "activation_map", "repolarization_map"}:
+            if self.coordinate_frame is None or not self.coordinate_frame.strip():
+                raise ValueError(
+                    f"{self.kind} observations require an explicit coordinate_frame"
+                )
+            if self.units is None:
+                raise ValueError(f"{self.kind} observations require units='ms'")
+            normalized = self.units.strip().lower()
+            if normalized not in {"ms", "msec", "millisecond", "milliseconds"}:
+                raise ValueError(
+                    f"{self.kind} values are compared in milliseconds; "
+                    f"unsupported units {self.units!r}"
+                )
+        return self
+
 
 class EPParameterSet(BaseModel):
     model_config = ConfigDict(extra="forbid")
