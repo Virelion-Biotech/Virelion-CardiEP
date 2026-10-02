@@ -1,0 +1,106 @@
+{
+  "schema_version": "cardiep-activation-profile-v1",
+  "benchmark_id": "niederer-2011",
+  "solver": {
+    "name": "fenicsx-beat",
+    "version": "0.7.0",
+    "commit": "7ab18453ae57c28d798b744234157f36297113d5"
+  },
+  "equation": "monodomain",
+  "ionic_model": "tenTusscher-Panfilov-2006-epicardial",
+  "coordinate_unit": "cm",
+  "time_unit": "ms",
+  "sample_points": [
+    {
+      "id": "P1",
+      "xyz": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "P2",
+      "xyz": [
+        0,
+        0.7,
+        0
+      ]
+    },
+    {
+      "id": "P3",
+      "xyz": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "P4",
+      "xyz": [
+        2,
+        0.7,
+        0
+      ]
+    },
+    {
+      "id": "P5",
+      "xyz": [
+        0,
+        0,
+        0.3
+      ]
+    },
+    {
+      "id": "P6",
+      "xyz": [
+        0,
+        0.7,
+        0.3
+      ]
+    },
+    {
+      "id": "P7",
+      "xyz": [
+        2,
+        0,
+        0.3
+      ]
+    },
+    {
+      "id": "P8",
+      "xyz": [
+        2,
+        0.7,
+        0.3
+      ]
+    },
+    {
+      "id": "P9",
+      "xyz": [
+        1,
+        0.35,
+        0.15
+      ]
+    }
+  ],
+  "activation": {
+    "P1": 1.225,
+    "P2": 25.5,
+    "P3": 31.26,
+    "P4": 37.81,
+    "P5": 7.99,
+    "P6": 26.09,
+    "P7": 31.72,
+    "P8": 37.93,
+    "P9": 17.835
+  },
+  "metadata": {
+    "dx_mm": 0.1,
+    "dt_ms": 0.005,
+    "activation_threshold_mV": 0,
+    "source": "finsberg/fenicsx-beat demos/niederer_benchmark.py",
+    "source_commit": "7ab18453ae57c28d798b744234157f36297113d5",
+    "role": "interoperability fixture; rerun upstream solver for publication claims"
+  }
+}
