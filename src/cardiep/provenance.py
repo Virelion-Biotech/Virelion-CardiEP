@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -45,3 +47,42 @@ def verify_file_sha256(path: str | Path, expected_sha256: str | None) -> None:
             f"Artifact SHA-256 mismatch for {Path(path)}: "
             f"expected {expected_sha256.lower()}, got {actual.lower()}"
         )
+
+
+
+def _distribution_version(name: str) -> str | None:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return None
+
+
+def package_source_sha256() -> str:
+    """Hash installed CardiEP Python sources so code changes cannot reuse run IDs."""
+    root = Path(__file__).resolve().parent
+    digest = hashlib.sha256()
+    paths = sorted(root.glob("*.py"), key=lambda item: item.name)
+    if not paths:
+        raise RuntimeError(f"No CardiEP Python sources found under {root}")
+    for path in paths:
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def native_runtime_fingerprint() -> dict[str, Any]:
+    details = {
+        "cardiep_version": _distribution_version("virelion-cardiep"),
+        "python_version": platform.python_version(),
+        "python_implementation": platform.python_implementation(),
+        "platform_machine": platform.machine(),
+        "numpy_version": _distribution_version("numpy"),
+        "pydantic_version": _distribution_version("pydantic"),
+        "source_sha256": package_source_sha256(),
+    }
+    return {
+        **details,
+        "fingerprint_sha256": sha256_json(details),
+    }
