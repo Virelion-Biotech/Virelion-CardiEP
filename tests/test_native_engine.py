@@ -71,6 +71,10 @@ def test_native_simulation_writes_typed_artifacts(tmp_path: Path) -> None:
     )
     assert result["validation_status"] == "software_checked"
     assert result["backend"] == NATIVE_BACKEND_NAME
+    assert len(result["provenance"]["run_sha256"]) == 64
+    assert len(result["provenance"]["implementation_sha256"]) == 64
+    assert len(result["provenance"]["runtime_fingerprint_sha256"]) == 64
+    assert result["provenance"]["runtime"]["cardiep_version"] == "0.3.0"
     kinds = {item["kind"] for item in result["outputs"]}
     assert {"activation_map", "repolarization_map", "pseudo_ecg", "ep_summary"} <= kinds
     for artifact in result["outputs"]:
@@ -102,6 +106,7 @@ def test_native_calibration_fits_activation_map(tmp_path: Path) -> None:
                         "kind": "activation_map",
                         "uri": observed.as_uri(),
                     },
+                    "coordinate_frame": "ep_mesh_node_order",
                     "units": "ms",
                 }
             ],
