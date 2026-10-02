@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 
 from .conduction import RootSchedule
@@ -172,7 +174,7 @@ def run_eikonal_refinement_validation(
         raise ValueError(
             "Default off-axis target requires refinement levels divisible by 4"
         )
-    if any(later <= earlier for earlier, later in zip(levels, levels[1:])):
+    if any(later <= earlier for earlier, later in pairwise(levels)):
         raise ValueError("Refinement levels must be strictly increasing")
 
     target = np.asarray([1.0, 0.5, 0.25], dtype=float)
@@ -209,7 +211,7 @@ def run_eikonal_refinement_validation(
                 "n": int(level),
                 "h_cm": 1.0 / level,
                 "n_nodes": int(geometry.n_nodes),
-                "n_tetrahedra": int(len(geometry.tetrahedra)),
+                "n_tetrahedra": len(geometry.tetrahedra),
                 "activation_ms": observed_ms,
                 "exact_ms": exact_ms,
                 "absolute_error_ms": error_ms,
@@ -218,7 +220,7 @@ def run_eikonal_refinement_validation(
 
     monotone = all(
         later < earlier
-        for earlier, later in zip(errors, errors[1:])
+        for earlier, later in pairwise(errors)
     )
     reduction_ratio = errors[-1] / max(errors[0], 1e-15)
     passed = bool(
