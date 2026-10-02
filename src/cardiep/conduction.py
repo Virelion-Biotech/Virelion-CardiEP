@@ -8,6 +8,26 @@ import numpy as np
 from .geometry import EPGeometry
 
 
+def _integer_nodes(values: Any, name: str) -> np.ndarray:
+    raw = np.asarray(values)
+    if np.issubdtype(raw.dtype, np.integer):
+        return raw.astype(np.int64, copy=False).reshape(-1)
+    numeric = np.asarray(values, dtype=float).reshape(-1)
+    if not np.isfinite(numeric).all() or not np.equal(numeric, np.floor(numeric)).all():
+        raise ValueError(f"{name} must contain finite integer node indices")
+    return numeric.astype(np.int64)
+
+
+def _positive_integer(value: Any, name: str) -> int:
+    raw = np.asarray(value)
+    if raw.ndim != 0:
+        raise ValueError(f"{name} must be one positive integer")
+    numeric = float(raw)
+    if not np.isfinite(numeric) or numeric <= 0 or numeric != np.floor(numeric):
+        raise ValueError(f"{name} must be one positive integer")
+    return int(numeric)
+
+
 @dataclass(frozen=True)
 class RootSchedule:
     nodes: np.ndarray
@@ -15,7 +35,7 @@ class RootSchedule:
     method: str
 
     def __post_init__(self) -> None:
-        nodes = np.asarray(self.nodes, dtype=int).reshape(-1)
+        nodes = _integer_nodes(self.nodes, "Root schedule nodes")
         activation = np.asarray(self.activation_ms, dtype=float).reshape(-1)
         if len(nodes) == 0 or len(nodes) != len(activation):
             raise ValueError("Root schedule requires equally sized non-empty node/time arrays")
@@ -34,7 +54,7 @@ def _farthest_point_roots(geometry: EPGeometry, count: int) -> np.ndarray:
             "Automatic root selection requires geometry.endocardial_nodes; "
             "otherwise provide settings.root_nodes explicitly"
         )
-    count = max(1, min(int(count), len(candidates)))
+    count = min(_positive_integer(count, "auto_root_count"), len(candidates))
     xyz = geometry.node_xyz_cm[candidates]
     center = xyz.mean(axis=0)
     selected = [int(np.argmax(np.linalg.norm(xyz - center, axis=1)))]
@@ -57,15 +77,23 @@ def resolve_root_schedule(
         if geometry.root_nodes:
             raw_nodes = list(geometry.root_nodes)
             method = "geometry"
-        elif settings.get("auto_root_count"):
-            raw_nodes = _farthest_point_roots(geometry, int(settings["auto_root_count"])).tolist()
+        elif "auto_root_count" in settings:
+            raw_nodes = _farthest_point_roots(
+                geometry,
+                _positive_integer(settings["auto_root_count"], "auto_root_count"),
+            ).tolist()
             method = "endocardial-farthest-point-heuristic"
         else:
             raise ValueError(
                 "No ventricular activation roots supplied. Provide settings.root_nodes, "
                 "embed root_nodes in the EP geometry, or use auto_root_count with an endocardial mask."
             )
-    nodes = np.asarray(raw_nodes, dtype=int).reshape(-1)
+
+    nodes = _integer_nodes(raw_nodes, "root_nodes")
+    if len(nodes) == 0:
+        raise ValueError("root_nodes must contain at least one node")
+    if len(np.unique(nodes)) != len(nodes):
+        raise ValueError("root_nodes must be unique")
     if np.any(nodes < 0) or np.any(nodes >= geometry.n_nodes):
         raise ValueError("root_nodes contain out-of-range node indices")
 
@@ -73,20 +101,45 @@ def resolve_root_schedule(
     if raw_times is None:
         times = np.zeros(len(nodes), dtype=float)
     elif isinstance(raw_times, dict):
-        times = np.asarray([float(raw_times.get(str(int(node)), raw_times.get(int(node), 0.0))) for node in nodes])
+        times_list: list[float] = []
+        missing: list[int] = []
+        for node in nodes:
+            int_node = int(node)
+            if str(int_node) in raw_times:
+                value = raw_times[str(int_node)]
+            elif int_node in raw_times:
+                value = raw_times[int_node]
+            else:
+                missing.append(int_node)
+                continue
+            times_list.append(float(value))
+        if missing:
+            raise ValueError(
+                f"root_activation_ms mapping is missing root nodes: {missing}"
+            )
+        times = np.asarray(times_list, dtype=float)
     else:
         times = np.asarray(raw_times, dtype=float).reshape(-1)
         if len(times) != len(nodes):
             raise ValueError("root_activation_ms must match root_nodes")
+    if not np.isfinite(times).all():
+        raise ValueError("root_activation_ms must contain only finite values")
 
     distances = settings.get("purkinje_root_distance_cm")
     if distances is not None:
         distance = np.asarray(distances, dtype=float).reshape(-1)
         if len(distance) != len(nodes) or np.any(distance < 0) or not np.isfinite(distance).all():
-            raise ValueError("purkinje_root_distance_cm must contain one finite non-negative value per root")
-        speed = float(parameters.get("purkinje_speed", parameters.get("purkinje_speed_cm_per_ms", 0.30)))
+            raise ValueError(
+                "purkinje_root_distance_cm must contain one finite non-negative value per root"
+            )
+        speed = float(
+            parameters.get(
+                "purkinje_speed",
+                parameters.get("purkinje_speed_cm_per_ms", 0.30),
+            )
+        )
         if not np.isfinite(speed) or speed <= 0:
-            raise ValueError("purkinje_speed must be positive")
+            raise ValueError("purkinje_speed must be positive and finite")
         times = times + distance / speed
         method += "+purkinje-distance"
 
