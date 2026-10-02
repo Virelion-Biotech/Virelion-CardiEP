@@ -20,6 +20,17 @@ from .models import (
 from .native_backend import NATIVE_BACKEND_NAME, NativeEikonalBackend
 from .propagation import PropagationResult, anisotropic_eikonal
 from .repolarization import RepolarizationResult, apd_map
+from .scientific_validation import (
+    ActivationProfile,
+    AgreementThresholds,
+    ConvergenceLevel,
+    activation_profile_from_csv,
+    compare_activation_profiles,
+    fenicsx_beat_niederer_reference,
+    load_convergence_manifest,
+    mesh_convergence_report,
+    niederer_2011_spec,
+)
 from .service import CardiEPService, ReadinessError
 from .validation import run_reference_validation, synthetic_tetra_geometry
 
@@ -27,8 +38,11 @@ __all__ = [
     "EPAPI",
     "EXTERNAL_ECOSYSTEM",
     "NATIVE_BACKEND_NAME",
+    "ActivationProfile",
+    "AgreementThresholds",
     "ArtifactRef",
     "CardiEPService",
+    "ConvergenceLevel",
     "DiscrepancyReport",
     "DiscrepancyTerm",
     "ECGResult",
@@ -46,11 +60,17 @@ __all__ = [
     "RepolarizationResult",
     "RootSchedule",
     "SubprocessEPBackend",
+    "activation_profile_from_csv",
     "anisotropic_eikonal",
     "apd_map",
     "calibration_request_from_electrotrace",
+    "compare_activation_profiles",
     "evaluate_observations",
+    "fenicsx_beat_niederer_reference",
+    "load_convergence_manifest",
     "load_ep_geometry",
+    "mesh_convergence_report",
+    "niederer_2011_spec",
     "observations_from_electrotrace",
     "pseudo_ecg",
     "resolve_root_schedule",
