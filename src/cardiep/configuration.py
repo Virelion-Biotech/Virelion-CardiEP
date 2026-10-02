@@ -48,6 +48,7 @@ _NATIVE_SETTINGS = {
     "ecg_chunk_size",
     "output_dir",
     "likelihood_hints",
+    "measurement_handoff_schema",
     "step_fraction",
     "max_iterations",
     "step_tolerance",
