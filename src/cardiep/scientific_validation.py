@@ -371,9 +371,9 @@ def mesh_convergence_report(
     errors_to_exact: list[float] | None = None
     observed_orders: list[float | None] = []
     if exact is not None:
-        exact_values, _ = _aligned_values(
-            exact,
+        _, exact_values = _aligned_values(
             base,
+            exact,
             point_tolerance_cm=1e-6,
         )
         errors_to_exact = [
