@@ -20,6 +20,7 @@ class ArtifactRef(BaseModel):
     kind: str
     uri: str
     sha256: str | None = Field(default=None, min_length=64, max_length=64)
+    coordinate_frame: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("sha256")
