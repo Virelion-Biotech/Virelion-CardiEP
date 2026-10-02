@@ -154,6 +154,54 @@ def _ecg_leads(raw: dict[str, Any]) -> tuple[list[str], dict[str, np.ndarray]]:
     return names, leads
 
 
+def _observed_ecg_time_ms(raw: dict[str, Any], n_samples: int) -> tuple[np.ndarray | None, bool]:
+    if "relative_time_s" in raw:
+        time = np.asarray(raw["relative_time_s"], dtype=float).reshape(-1) * 1000.0
+        is_relative = True
+    elif "time_ms" in raw:
+        time = np.asarray(raw["time_ms"], dtype=float).reshape(-1)
+        is_relative = False
+    else:
+        return None, False
+    if len(time) != n_samples:
+        raise ValueError("ECG time axis length does not match waveform samples")
+    if not np.isfinite(time).all() or np.any(np.diff(time) <= 0):
+        raise ValueError("ECG time axis must be finite and strictly increasing")
+    return time, is_relative
+
+
+def _align_simulated_ecg(
+    raw: dict[str, Any],
+    observed_signal: np.ndarray,
+    simulated: ECGResult,
+    simulated_signal: np.ndarray,
+) -> np.ndarray:
+    observed_time, is_relative = _observed_ecg_time_ms(raw, len(observed_signal))
+    if observed_time is None:
+        return _resample(simulated_signal, len(observed_signal))
+
+    simulated_time = np.asarray(simulated.time_ms, dtype=float).reshape(-1)
+    if len(simulated_time) != len(simulated_signal):
+        raise ValueError("Simulated ECG time axis length does not match waveform samples")
+    if not np.isfinite(simulated_time).all() or np.any(np.diff(simulated_time) <= 0):
+        raise ValueError("Simulated ECG time axis must be finite and strictly increasing")
+
+    if is_relative:
+        if simulated.reference_time_ms is None or not np.isfinite(simulated.reference_time_ms):
+            raise ValueError(
+                "R-relative ECG comparison requires a finite simulated reference_time_ms"
+            )
+        simulated_time = simulated_time - float(simulated.reference_time_ms)
+
+    return np.interp(
+        observed_time,
+        simulated_time,
+        simulated_signal,
+        left=0.0,
+        right=0.0,
+    )
+
+
 def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> float:
     _, observed = _ecg_leads(raw)
     simulated_by_lead = {
@@ -173,7 +221,17 @@ def ecg_discrepancy(raw: dict[str, Any], simulated: ECGResult, metric: str) -> f
     }
     if metric not in metrics:
         raise ValueError(f"Unsupported ECG discrepancy metric: {metric}")
-    return float(np.mean([metrics[metric](observed[name], simulated_by_lead[name]) for name in common]))
+
+    values = []
+    for name in common:
+        aligned = _align_simulated_ecg(
+            raw,
+            observed[name],
+            simulated,
+            simulated_by_lead[name],
+        )
+        values.append(metrics[metric](observed[name], aligned))
+    return float(np.mean(values))
 
 
 def _field_values(raw: dict[str, Any], *keys: str) -> np.ndarray:
