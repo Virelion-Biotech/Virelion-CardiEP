@@ -1,6 +1,6 @@
 [project]
 name = "virelion-cardiep"
-version = "0.2.0"
+version = "0.3.0"
 description = "Patient-specific cardiac electrophysiology simulation, personalization, and backend orchestration for HeartTwin"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
