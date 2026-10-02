@@ -7,6 +7,15 @@ from typing import Any
 from .models import ArtifactRef, EPCalibrationRequest, EPObservation, EPParameterSet
 
 
+def _validate_handoff_subject(handoff: Mapping[str, Any], subject_id: str) -> None:
+    entity_id = handoff.get("entity_id")
+    if entity_id is not None and str(entity_id) != str(subject_id):
+        raise ValueError(
+            f"ElectroTrace handoff entity_id {entity_id!r} does not match "
+            f"requested subject_id {subject_id!r}"
+        )
+
+
 def observations_from_electrotrace(handoff: Mapping[str, Any]) -> list[EPObservation]:
     """Validate ElectroTrace calibration observations without weakening CardiEP types."""
     raw = handoff.get("observations")
@@ -34,6 +43,7 @@ def calibration_request_from_electrotrace(
     settings: Mapping[str, Any] | None = None,
 ) -> EPCalibrationRequest:
     """Create a typed CardiEP calibration request from an ElectroTrace handoff."""
+    _validate_handoff_subject(handoff, subject_id)
     anatomy = (
         anatomy_ref
         if isinstance(anatomy_ref, ArtifactRef)
