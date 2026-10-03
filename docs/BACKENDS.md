@@ -92,3 +92,26 @@ A production backend should:
 8. provide at least one analytic or manufactured-solution test;
 9. declare whether output ECGs are torso/lead-field based or only proxies;
 10. never claim clinical validation from software tests.
+
+
+## Built-in EAM surface backend
+
+`surface-eikonal-v1` is a separate isotropic graph-Eikonal backend for
+electroanatomical triangle surfaces when volumetric fibre-resolved anatomy is
+unavailable. It consumes:
+
+- a `cardiep-surface-v1` JSON anatomy artifact containing vertices, triangles,
+  and an explicit coordinate unit;
+- `cardiep-eam-activation-v1` observation artifacts containing surface vertex
+  indices and measured activation times.
+
+Calibration jointly selects a discrete root candidate and fits isotropic
+conduction speed plus a global timing offset by bounded least squares. The
+backend emits a full surface activation map and retains the chosen root and
+fit diagnostics in provenance.
+
+This backend is intentionally **surface-only, isotropic, and software-checked**.
+It is useful as an EAM observable baseline and for cohorts such as ARGO where a
+volumetric fibre-resolved patient mesh is unavailable. It must not be described
+as equivalent to the fibre-resolved tetrahedral solver, monodomain/bidomain
+physics, or a clinically validated patient-specific EP model.

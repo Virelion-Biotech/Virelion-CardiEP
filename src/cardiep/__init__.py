@@ -32,6 +32,7 @@ from .scientific_validation import (
     niederer_2011_spec,
 )
 from .service import CardiEPService, ReadinessError
+from .surface_backend import SURFACE_BACKEND_NAME, SurfaceEikonalBackend, load_surface_geometry
 from .validation import (
     run_eikonal_refinement_validation,
     run_reference_validation,
@@ -42,6 +43,7 @@ __all__ = [
     "EPAPI",
     "EXTERNAL_ECOSYSTEM",
     "NATIVE_BACKEND_NAME",
+    "SURFACE_BACKEND_NAME",
     "ActivationProfile",
     "AgreementThresholds",
     "ArtifactRef",
@@ -64,6 +66,7 @@ __all__ = [
     "RepolarizationResult",
     "RootSchedule",
     "SubprocessEPBackend",
+    "SurfaceEikonalBackend",
     "activation_profile_from_csv",
     "anisotropic_eikonal",
     "apd_map",
@@ -73,6 +76,7 @@ __all__ = [
     "fenicsx_beat_niederer_reference",
     "load_convergence_manifest",
     "load_ep_geometry",
+    "load_surface_geometry",
     "mesh_convergence_report",
     "niederer_2011_spec",
     "observations_from_electrotrace",

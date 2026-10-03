@@ -6,10 +6,14 @@ from typing import Any
 
 from .backends import EPBackend
 from .native_backend import NativeEikonalBackend
+from .surface_backend import SurfaceEikonalBackend
 
 
 def discover_backends() -> dict[str, EPBackend]:
-    backends: dict[str, EPBackend] = {NativeEikonalBackend.name: NativeEikonalBackend()}
+    backends: dict[str, EPBackend] = {
+        NativeEikonalBackend.name: NativeEikonalBackend(),
+        SurfaceEikonalBackend.name: SurfaceEikonalBackend(),
+    }
     eps = entry_points()
     selected = (
         eps.select(group="cardiep.backends")
