@@ -1,0 +1,46 @@
+name: Scientific validation contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/cardiep/scientific_validation.py"
+      - "tests/test_scientific_validation.py"
+      - "validation/**"
+      - "docs/SCIENTIFIC_VALIDATION.md"
+      - "src/cardiep/cli.py"
+      - ".github/workflows/scientific-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validation-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: pytest -q tests/test_scientific_validation.py tests/test_propagation.py
+      - name: Verify native Eikonal mesh refinement
+        run: cardiep validate-eikonal-convergence
+      - name: Emit benchmark and pinned reference
+        run: |
+          cardiep niederer-spec --output /tmp/niederer-spec.json
+          cardiep niederer-fenicsx-reference --output /tmp/fenicsx-reference.json
+      - name: Prove canonical reference round-trip and strict self-agreement
+        run: |
+          cardiep compare-activation \
+            validation/niederer/fenicsx-beat-0.7.0-dx0.1-dt0.005.json \
+            /tmp/fenicsx-reference.json \
+            --rmse-ms-max 1e-12 \
+            --max-abs-ms-max 1e-12 \
+            --correlation-min 0.999999999999 \
+            --abs-bias-ms-max 1e-12 \
+            --output /tmp/cross-solver-self-check.json
+          cat /tmp/cross-solver-self-check.json

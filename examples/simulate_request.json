@@ -1,0 +1,25 @@
+{
+  "subject_id": "demo",
+  "anatomy_ref": {
+    "artifact_id": "demo-geometry",
+    "kind": "ep_geometry",
+    "uri": "examples/minimal_geometry.json"
+  },
+  "backend": "numpy-eikonal-v1",
+  "parameters": {
+    "values": {
+      "fibre_speed": 0.1,
+      "sheet_speed": 0.05,
+      "normal_speed": 0.025,
+      "apd_min_ms": 250.0,
+      "apd_max_ms": 300.0,
+      "apd_gradient_tm": 1.0
+    },
+    "source": "fixed"
+  },
+  "settings": {
+    "root_nodes": [0],
+    "ecg_sample_rate_hz": 250.0,
+    "output_dir": "cardiep_runs/demo"
+  }
+}
