@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 
 from cardiep import (
+    SURFACE_BACKEND_NAME,
     ArtifactRef,
     CardiEPService,
     EPCalibrationRequest,
     EPObservation,
-    EPSimulationRequest,
     EPParameterSet,
-    SURFACE_BACKEND_NAME,
+    EPSimulationRequest,
 )
 from cardiep.provenance import file_sha256
 

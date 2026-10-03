@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import heapq
 import json
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +45,7 @@ class SurfaceGeometry:
 
     @property
     def n_vertices(self) -> int:
-        return int(len(self.vertices_cm))
+        return len(self.vertices_cm)
 
 
 def _load_json_artifact(ref) -> dict[str, Any]:
@@ -73,7 +73,7 @@ def load_surface_geometry(ref) -> SurfaceGeometry:
 
 
 def _adjacency(geometry: SurfaceGeometry) -> list[list[tuple[int, float]]]:
-    neighbors: list[dict[int, float]] = [dict() for _ in range(geometry.n_vertices)]
+    neighbors: list[dict[int, float]] = [{} for _ in range(geometry.n_vertices)]
     for triangle in geometry.triangles:
         for left, right in (
             (int(triangle[0]), int(triangle[1])),
@@ -247,7 +247,7 @@ class SurfaceEikonalBackend:
                 "backend": self.name,
                 "root_node": root,
                 "n_vertices": geometry.n_vertices,
-                "n_triangles": int(len(geometry.triangles)),
+                "n_triangles": len(geometry.triangles),
                 "activation_min_ms": float(np.min(activation)),
                 "activation_max_ms": float(np.max(activation)),
                 "activation_span_ms": float(np.ptp(activation)),
@@ -261,8 +261,10 @@ class SurfaceEikonalBackend:
             outputs=[activation_ref, summary_ref],
             validation_status="software_checked",
             warnings=[
-                "surface-eikonal-v1 is isotropic and surface-only; it does not "
-                "represent fibre-resolved transmural ventricular propagation."
+                (
+                    "surface-eikonal-v1 is isotropic and surface-only; it does not "
+                    "represent fibre-resolved transmural ventricular propagation."
+                )
             ],
             provenance={
                 "engine": "Virelion-CardiEP",
@@ -298,7 +300,7 @@ class SurfaceEikonalBackend:
 
         raw_candidates = request.settings.get("root_candidates")
         if raw_candidates is None:
-            candidates = sorted(set(int(item) for item in vertices))
+            candidates = sorted({int(item) for item in vertices})
         else:
             candidates = [int(item) for item in raw_candidates]
         if not candidates or len(candidates) != len(set(candidates)):
@@ -377,7 +379,7 @@ class SurfaceEikonalBackend:
                 "method": "discrete-root-plus-bounded-linear-inverse-speed-fit",
                 "root_node": int(best["root_node"]),
                 "n_root_candidates": len(candidates),
-                "n_calibration_points": int(len(vertices)),
+                "n_calibration_points": len(vertices),
                 "rmse_ms": float(best["rmse"]),
                 "mae_ms": float(best["mae"]),
                 "max_abs_ms": float(best["max_abs"]),
