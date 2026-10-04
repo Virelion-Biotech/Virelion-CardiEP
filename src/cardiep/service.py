@@ -57,6 +57,21 @@ class CardiEPService:
             raise ReadinessError(
                 f"Backend identity mismatch: request={request.backend!r}, result={result.backend!r}"
             )
+
+        # Preserve the exact anatomy identity at the service boundary so every
+        # backend participates in the same HeartTwin lineage contract.
+        result.provenance.setdefault("anatomy_artifact_id", request.anatomy_ref.artifact_id)
+        if request.anatomy_ref.sha256 is not None:
+            result.provenance.setdefault("anatomy_sha256", request.anatomy_ref.sha256)
+        if request.anatomy_ref.coordinate_frame is not None:
+            result.provenance.setdefault(
+                "anatomy_coordinate_frame", request.anatomy_ref.coordinate_frame
+            )
+        bundle_fingerprint = request.anatomy_ref.metadata.get("bundle_fingerprint")
+        if bundle_fingerprint is not None:
+            result.provenance.setdefault(
+                "anatomy_bundle_fingerprint", str(bundle_fingerprint)
+            )
         return result
 
     def calibrate(self, request: EPCalibrationRequest) -> EPCalibrationResult:
