@@ -14,7 +14,7 @@ def _require_unique_observations(observations: list[EPObservation]) -> None:
 
 
 class ArtifactRef(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     artifact_id: str
     kind: str
@@ -35,7 +35,7 @@ class ArtifactRef(BaseModel):
 
 
 class EPObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     observation_id: str
     kind: Literal[
@@ -52,7 +52,7 @@ class EPObservation(BaseModel):
 
 
 class EPParameterSet(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     values: dict[str, float] = Field(default_factory=dict)
     units: dict[str, str] = Field(default_factory=dict)
@@ -67,7 +67,7 @@ class EPParameterSet(BaseModel):
 
 
 class EPSimulationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     subject_id: str
     anatomy_ref: ArtifactRef
@@ -83,7 +83,7 @@ class EPSimulationRequest(BaseModel):
 
 
 class EPSimulationResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     contract_version: str = "1.0"
     subject_id: str
@@ -101,7 +101,7 @@ class EPSimulationResult(BaseModel):
 
 
 class EPCalibrationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     subject_id: str
     anatomy_ref: ArtifactRef
@@ -126,7 +126,7 @@ class EPCalibrationRequest(BaseModel):
 
 
 class EPCalibrationResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     contract_version: str = "1.0"
     subject_id: str

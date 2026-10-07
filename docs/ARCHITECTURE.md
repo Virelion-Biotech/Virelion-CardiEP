@@ -48,11 +48,11 @@ The structure is intentionally similar to successful cardiac digital-twinning sy
 
 ## Native propagation
 
-`numpy-eikonal-v1` turns each tetrahedral mesh into an undirected edge graph. For an edge displacement **d**, a local fibre-sheet-normal basis is built and the travel time is computed from the orthotropic velocity components. Border-zone and dense-scar labels reduce the local speed through explicit multipliers.
+`numpy-eikonal-v1` uses tetrahedral Hopf–Lax relaxation. At each vertex, it minimizes interpolated arrival time plus metric travel time over the opposite triangular face. The local metric uses the fibre/sheet/normal speeds; scar multipliers modify cell speeds. This permits wavefront updates through cell interiors rather than only along edges.
 
-A multi-source Dijkstra solve produces local activation times. Explicit root activation offsets may encode conduction-system delay. When root-to-PMJ path lengths are available, Purkinje delay is added using `purkinje_speed`.
+Explicit root activation offsets may encode conduction-system delay. When root-to-PMJ path lengths are available, Purkinje delay is added using `purkinje_speed`. The earliest root defines time zero.
 
-This is a graph-Eikonal approximation rather than a finite-element solution of the continuous Eikonal PDE.
+This stationary Eikonal approximation has no ionic currents, diffusion time stepping, or monodomain/bidomain PDE solve. `surface-eikonal-v1` separately uses graph shortest paths on triangular surfaces.
 
 ## Repolarization
 
@@ -62,7 +62,7 @@ CardiEP supports:
 - APD min/max bounds;
 - linear gradients over any named ventricular coordinate, e.g. `tm`, `ab`, `rt`, `tv`, or Cobiveco fields.
 
-Repolarization is `activation + APD`.
+Repolarization is `activation + APD`. Coordinate gradients are normalized to the prescribed APD range: a lone positive gradient coefficient therefore controls direction but its magnitude is not identifiable. Synthetic recovery of constant APD does not validate spatial gradients or restitution.
 
 ## ECG model
 

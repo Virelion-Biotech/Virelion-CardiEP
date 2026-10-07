@@ -19,6 +19,8 @@ def apd_map(
     activation_ms: np.ndarray,
     parameters: dict[str, float],
 ) -> RepolarizationResult:
+    if any(not np.isfinite(float(value)) for value in parameters.values()):
+        raise ValueError("APD parameters must be finite")
     n = geometry.n_nodes
     if "apd_ms" in parameters:
         value = float(parameters["apd_ms"])
@@ -49,6 +51,8 @@ def apd_map(
     activation = np.asarray(activation_ms, dtype=float)
     if activation.shape != (n,):
         raise ValueError("activation_ms shape must match the EP mesh")
+    if not np.isfinite(activation).all() or not np.isfinite(apd).all() or not np.isfinite(activation + apd).all():
+        raise ValueError("Activation and repolarization times must be finite")
     return RepolarizationResult(
         apd_ms=apd,
         repolarization_ms=activation + apd,

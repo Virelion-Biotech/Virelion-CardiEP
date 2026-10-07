@@ -56,7 +56,7 @@ class ActivationProfile:
             raise ValueError("benchmark_id must be non-empty")
         if not self.solver_name.strip():
             raise ValueError("solver_name must be non-empty")
-        if len(ids) == 0 or len(ids) != len(set(ids)):
+        if len(ids) == 0 or any(not item.strip() for item in ids) or len(ids) != len(set(ids)):
             raise ValueError("sample_ids must be unique and non-empty")
         points = _finite_array(self.points_cm, name="points_cm", ndim=2)
         activation = _finite_array(self.activation_ms, name="activation_ms", ndim=1)
@@ -65,6 +65,9 @@ class ActivationProfile:
         if activation.shape != (len(ids),):
             raise ValueError("activation_ms must contain one value per sample_id")
         object.__setattr__(self, "sample_ids", ids)
+        points, activation = points.copy(), activation.copy()
+        points.setflags(write=False)
+        activation.setflags(write=False)
         object.__setattr__(self, "points_cm", points)
         object.__setattr__(self, "activation_ms", activation)
 
@@ -269,6 +272,10 @@ def _aligned_values(
         raise ValueError(
             f"Benchmark mismatch: {reference.benchmark_id!r} != {candidate.benchmark_id!r}"
         )
+    for field_name in ("equation", "ionic_model"):
+        left, right = getattr(reference, field_name), getattr(candidate, field_name)
+        if left != right:
+            raise ValueError(f"{field_name} mismatch: {left!r} != {right!r}")
     if set(reference.sample_ids) != set(candidate.sample_ids):
         raise ValueError("Activation profiles do not contain the same sample IDs")
     candidate_index = {name: i for i, name in enumerate(candidate.sample_ids)}
@@ -325,8 +332,8 @@ def compare_activation_profiles(
     reference_span = float(np.ptp(ref))
     normalized_rmse = rmse / reference_span if reference_span > 1e-12 else None
 
-    if np.allclose(ref, ref[0]) or np.allclose(cand, cand[0]):
-        correlation = 1.0 if np.allclose(ref, cand) else 0.0
+    if np.ptp(ref) == 0 or np.ptp(cand) == 0:
+        correlation = None
         slope = None
         intercept = None
     else:
@@ -341,7 +348,7 @@ def compare_activation_profiles(
         checks = {
             "rmse_ms": rmse <= thresholds.rmse_ms_max,
             "max_abs_ms": max_abs <= thresholds.max_abs_ms_max,
-            "correlation": correlation >= thresholds.correlation_min,
+            "correlation": correlation is not None and correlation >= thresholds.correlation_min,
             "abs_bias_ms": abs(bias) <= thresholds.abs_bias_ms_max,
         }
         status = "pass" if all(checks.values()) else "fail"
@@ -413,6 +420,8 @@ def mesh_convergence_report(
 ) -> dict[str, Any]:
     if len(levels) < 3:
         raise ValueError("At least three mesh levels are required")
+    if not math.isfinite(refinement_ratio_tolerance) or refinement_ratio_tolerance < 0:
+        raise ValueError("refinement_ratio_tolerance must be finite and non-negative")
     ordered = sorted(levels, key=lambda item: item.h, reverse=True)
     h = np.asarray([item.h for item in ordered], dtype=float)
     if not np.all(np.diff(h) < 0):
@@ -469,7 +478,7 @@ def mesh_convergence_report(
             d_coarse = differences[i]
             d_fine = differences[i + 1]
             ratio = ratios[i + 1]
-            if d_coarse <= 0 or d_fine <= 0:
+            if not approximately_uniform or d_coarse <= 0 or d_fine <= 0:
                 observed_orders.append(None)
             else:
                 observed_orders.append(
@@ -486,9 +495,11 @@ def mesh_convergence_report(
     )
 
     gci_fine_ms = None
-    finite_orders = [item for item in observed_orders if item is not None and item > 0]
-    if finite_orders and approximately_uniform and len(consecutive_rmse) >= 2:
-        p = float(finite_orders[-1])
+    last_order = observed_orders[-1] if observed_orders else None
+    time_steps = {item.dt_ms for item in ordered}
+    isolated_spatial_refinement = len(time_steps) == 1
+    if last_order is not None and last_order > 0 and monotone and approximately_uniform and isolated_spatial_refinement and len(consecutive_rmse) >= 2:
+        p = float(last_order)
         r = float(ratios[-1])
         denominator = r**p - 1.0
         if denominator > 1e-12:
@@ -512,6 +523,8 @@ def mesh_convergence_report(
         "errors_to_exact_ms": errors_to_exact,
         "observed_orders": observed_orders,
         "gci_fine_ms": gci_fine_ms,
+        "isolated_spatial_refinement": isolated_spatial_refinement,
+        "time_step_metadata_complete": all(item.dt_ms is not None for item in ordered),
         "monotone_self_convergence": monotone,
         "scientific_boundary": (
             "Mesh self-convergence is necessary for numerical credibility but does not "

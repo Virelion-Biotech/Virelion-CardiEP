@@ -5,7 +5,7 @@ This directory separates **software correctness**, **numerical verification**, *
 ## Validation ladder
 
 1. **Software reference checks**
-   - deterministic graph-Eikonal edge travel times;
+   - deterministic tetrahedral Eikonal edge travel times;
    - typed contracts, units, checksums, roots, ECG timing;
    - regression tests.
    - Command: `cardiep validate-reference`.
@@ -241,3 +241,11 @@ For each solver/run preserve:
 - comparison and convergence reports.
 
 A result should not be labeled `numerically_checked` simply because a process exited successfully.
+
+## Comparison safeguards (0.3.0)
+
+Profiles must agree on declared equation class and ionic model as well as benchmark, sample IDs, and coordinates. Two undeclared model fields remain accepted for legacy numerical comparisons; this does not verify model equivalence. Constant profiles have undefined correlation and fail a correlation gate.
+
+Self-convergence order is omitted for nonuniform refinement ratios. GCI-style estimates require an approximately uniform sequence, a positive latest order, decreasing consecutive differences, and unchanged declared time steps. If every time step is absent, the estimate is conditional on a stationary model or unreported fixed time control; `time_step_metadata_complete` is false. Such an estimate must not be presented as verified isolation of spatial error in a time-dependent PDE.
+
+The pinned Niederer fixture was checked against its upstream source table during the CPU audit. This is a transcription check. No independent monodomain/bidomain solver was rerun in that audit.

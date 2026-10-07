@@ -58,21 +58,25 @@ class CardiEPService:
                 f"Backend identity mismatch: request={request.backend!r}, result={result.backend!r}"
             )
 
+        self._preserve_anatomy(request, result)
+        return result
+
+    @staticmethod
+    def _preserve_anatomy(request, result):
         # Preserve the exact anatomy identity at the service boundary so every
         # backend participates in the same HeartTwin lineage contract.
-        result.provenance.setdefault("anatomy_artifact_id", request.anatomy_ref.artifact_id)
+        expected = {"anatomy_artifact_id": request.anatomy_ref.artifact_id}
         if request.anatomy_ref.sha256 is not None:
-            result.provenance.setdefault("anatomy_sha256", request.anatomy_ref.sha256)
+            expected["anatomy_sha256"] = request.anatomy_ref.sha256
         if request.anatomy_ref.coordinate_frame is not None:
-            result.provenance.setdefault(
-                "anatomy_coordinate_frame", request.anatomy_ref.coordinate_frame
-            )
-        bundle_fingerprint = request.anatomy_ref.metadata.get("bundle_fingerprint")
-        if bundle_fingerprint is not None:
-            result.provenance.setdefault(
-                "anatomy_bundle_fingerprint", str(bundle_fingerprint)
-            )
-        return result
+            expected["anatomy_coordinate_frame"] = request.anatomy_ref.coordinate_frame
+        fingerprint = request.anatomy_ref.metadata.get("bundle_fingerprint")
+        if fingerprint is not None:
+            expected["anatomy_bundle_fingerprint"] = str(fingerprint)
+        for key, value in expected.items():
+            if key in result.provenance and result.provenance[key] != value:
+                raise ReadinessError(f"Backend anatomy identity conflict: {key}")
+            result.provenance[key] = value
 
     def calibrate(self, request: EPCalibrationRequest) -> EPCalibrationResult:
         result = self._backend(request.backend).calibrate(request)
@@ -82,4 +86,9 @@ class CardiEPService:
             raise ReadinessError(
                 f"Backend identity mismatch: request={request.backend!r}, result={result.backend!r}"
             )
+        if result.simulated is not None:
+            if result.simulated.subject_id != request.subject_id or result.simulated.backend != request.backend:
+                raise ReadinessError("Calibration returned a mismatched nested simulation")
+            self._preserve_anatomy(request, result.simulated)
+        self._preserve_anatomy(request, result)
         return result

@@ -4,7 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 
 def canonical_json(value: Any) -> str:
@@ -26,9 +27,11 @@ def file_sha256(path: str | Path) -> str:
 def uri_to_path(uri: str, *, relative_to: str | Path | None = None) -> Path:
     parsed = urlparse(uri)
     if parsed.scheme in {"", None}:
-        path = Path(unquote(uri))
+        path = Path(uri)
     elif parsed.scheme == "file":
-        path = Path(unquote(parsed.path))
+        if parsed.netloc not in {"", "localhost"}:
+            raise ValueError("Remote file URI authorities are not supported")
+        path = Path(url2pathname(parsed.path))
     else:
         raise ValueError(f"Only local file artifacts are supported by the native backend: {uri}")
     if not path.is_absolute() and relative_to is not None:

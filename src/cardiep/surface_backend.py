@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 
 from .artifacts import write_json_artifact
+from .configuration import validate_parameter_units
+from .geometry import _as_integer_array
 from .models import (
     EPCalibrationRequest,
     EPCalibrationResult,
@@ -29,7 +31,7 @@ class SurfaceGeometry:
 
     def __post_init__(self) -> None:
         vertices = np.asarray(self.vertices_cm, dtype=float)
-        triangles = np.asarray(self.triangles, dtype=np.int64)
+        triangles = _as_integer_array(self.triangles, "Surface triangle indices")
         if vertices.ndim != 2 or vertices.shape[1] != 3 or len(vertices) < 3:
             raise ValueError("Surface geometry vertices must have shape (N, 3)")
         if not np.isfinite(vertices).all():
@@ -40,6 +42,11 @@ class SurfaceGeometry:
             raise ValueError("Surface geometry contains out-of-range triangle indices")
         if np.any(np.sort(triangles, axis=1)[:, 1:] == np.sort(triangles, axis=1)[:, :-1]):
             raise ValueError("Surface geometry contains degenerate triangles")
+        a, b, c = vertices[triangles[:,0]], vertices[triangles[:,1]], vertices[triangles[:,2]]
+        areas2 = np.linalg.norm(np.cross(b-a, c-a), axis=1)
+        scale = np.linalg.norm(b-a, axis=1) * np.linalg.norm(c-a, axis=1)
+        if np.any(~np.isfinite(areas2)) or np.any(areas2 <= 100*np.finfo(float).eps*scale):
+            raise ValueError("Surface geometry contains geometrically degenerate triangles")
         object.__setattr__(self, "vertices_cm", vertices)
         object.__setattr__(self, "triangles", triangles)
 
@@ -68,7 +75,7 @@ def load_surface_geometry(ref) -> SurfaceGeometry:
     if scale is None:
         raise ValueError("Surface coordinate_unit must be one of cm, mm, or m")
     vertices = np.asarray(payload.get("vertices"), dtype=float) * scale
-    triangles = np.asarray(payload.get("triangles"), dtype=np.int64)
+    triangles = _as_integer_array(payload.get("triangles"), "Surface triangle indices")
     return SurfaceGeometry(vertices_cm=vertices, triangles=triangles)
 
 
@@ -147,6 +154,9 @@ def _activation_observations(
         if observation.kind not in {"eam_activation", "activation_map"}:
             continue
         payload = _load_json_artifact(observation.artifact)
+        for unit in (observation.units, payload.get("units")):
+            if unit is not None and str(unit).lower() not in {"ms", "millisecond", "milliseconds"}:
+                raise ValueError("Surface activation_ms requires millisecond units")
         if payload.get("schema_version") != "cardiep-eam-activation-v1":
             raise ValueError(
                 "Surface calibration observations must use "
@@ -175,6 +185,37 @@ def _activation_observations(
     return np.asarray(vertices, dtype=np.int64), np.asarray(activation, dtype=float)
 
 
+
+def _surface_configuration(settings, parameters, *, calibration=False):
+    allowed_settings = {"output_dir", "root_candidates" if calibration else "root_node"}
+    unknown = set(settings) - allowed_settings
+    if unknown:
+        raise ValueError(f"Unsupported surface settings: {sorted(unknown)}")
+    allowed_parameters = {"isotropic_speed", "isotropic_speed_cm_per_ms", "activation_offset_ms"}
+    unknown = set(parameters) - allowed_parameters
+    if unknown:
+        raise ValueError(f"Unsupported surface parameters: {sorted(unknown)}")
+
+
+def _bounded_inverse_speed_fit(distance, observed, speed_bounds, offset_bounds=None):
+    """Solve the convex, box-constrained two-parameter least-squares problem."""
+    low, high = 1.0 / speed_bounds[1], 1.0 / speed_bounds[0]
+    offset_low, offset_high = (-np.inf, np.inf) if offset_bounds is None else offset_bounds
+    centered = distance - np.mean(distance)
+    denominator = float(centered @ centered)
+    if denominator <= np.finfo(float).eps * max(float(distance @ distance), np.finfo(float).tiny):
+        raise ValueError("Surface speed and offset are unidentifiable at equal root distances")
+    slope = float(centered @ (observed - np.mean(observed)) / denominator)
+    candidates = []
+    for inv_speed in (float(np.clip(slope, low, high)), low, high):
+        offset = float(np.clip(np.mean(observed - distance * inv_speed), offset_low, offset_high))
+        candidates.append((inv_speed, offset))
+    for offset in (offset_low, offset_high):
+        if np.isfinite(offset):
+            inv_speed = float(np.clip(distance @ (observed-offset) / (distance @ distance), low, high))
+            candidates.append((inv_speed, float(offset)))
+    return min(candidates, key=lambda pair: float(np.mean((pair[1] + distance*pair[0] - observed)**2)))
+
 class SurfaceEikonalBackend:
     """Isotropic graph-Eikonal backend for electroanatomical surface meshes.
 
@@ -194,11 +235,15 @@ class SurfaceEikonalBackend:
         parameters: dict[str, float],
         settings: dict[str, Any],
     ) -> tuple[SurfaceGeometry, np.ndarray, int, float, float]:
+        _surface_configuration(settings, parameters)
         geometry = load_surface_geometry(anatomy_ref)
         adjacency = _adjacency(geometry)
         if "root_node" not in settings:
             raise ValueError("surface-eikonal-v1 requires settings.root_node")
-        root = int(settings["root_node"])
+        raw_root = settings["root_node"]
+        if isinstance(raw_root, bool) or not isinstance(raw_root, (int, np.integer)):
+            raise TypeError("root_node must be an integer")
+        root = int(raw_root)
         speed = _speed(parameters)
         offset = float(parameters.get("activation_offset_ms", 0.0))
         if not math.isfinite(offset):
@@ -210,6 +255,7 @@ class SurfaceEikonalBackend:
         return geometry, activation, root, speed, offset
 
     def simulate(self, request: EPSimulationRequest) -> EPSimulationResult:
+        validate_parameter_units(request.parameters)
         geometry, activation, root, speed, offset = self._activation(
             anatomy_ref=request.anatomy_ref,
             parameters=dict(request.parameters.values),
@@ -279,6 +325,8 @@ class SurfaceEikonalBackend:
         )
 
     def calibrate(self, request: EPCalibrationRequest) -> EPCalibrationResult:
+        if request.initial_parameters is not None and request.initial_parameters.values:
+            raise ValueError("Surface calibration uses an exact bounded fit and does not accept initial_parameters")
         geometry = load_surface_geometry(request.anatomy_ref)
         adjacency = _adjacency(geometry)
         vertices, observed = _activation_observations(request, geometry.n_vertices)
@@ -293,6 +341,7 @@ class SurfaceEikonalBackend:
             raise ValueError(
                 "Surface calibration requires isotropic_speed_cm_per_ms parameter bounds"
             )
+        _surface_configuration(request.settings, request.parameter_bounds, calibration=True)
         low, high = request.parameter_bounds[speed_key]
         low_speed, high_speed = float(low), float(high)
         if not (0 < low_speed < high_speed and math.isfinite(high_speed)):
@@ -302,6 +351,8 @@ class SurfaceEikonalBackend:
         if raw_candidates is None:
             candidates = sorted({int(item) for item in vertices})
         else:
+            if any(isinstance(item, bool) or not isinstance(item, (int, np.integer)) for item in raw_candidates):
+                raise ValueError("root_candidates must contain integer indices")
             candidates = [int(item) for item in raw_candidates]
         if not candidates or len(candidates) != len(set(candidates)):
             raise ValueError("root_candidates must contain unique surface vertex indices")
@@ -314,20 +365,14 @@ class SurfaceEikonalBackend:
             sampled = distance[vertices]
             if not np.isfinite(sampled).all():
                 continue
-            centered_distance = sampled - float(np.mean(sampled))
-            centered_observed = observed - float(np.mean(observed))
-            denominator = float(np.dot(centered_distance, centered_distance))
-            if denominator <= 1e-18:
-                inv_speed = 1.0 / (0.5 * (low_speed + high_speed))
-            else:
-                inv_speed = float(
-                    np.dot(centered_distance, centered_observed) / denominator
+            try:
+                inv_speed, offset = _bounded_inverse_speed_fit(
+                    sampled, observed, (low_speed, high_speed),
+                    request.parameter_bounds.get("activation_offset_ms"),
                 )
-            inv_speed = float(
-                np.clip(inv_speed, 1.0 / high_speed, 1.0 / low_speed)
-            )
+            except ValueError:
+                continue
             speed = 1.0 / inv_speed
-            offset = float(np.mean(observed - sampled * inv_speed))
             predicted = offset + sampled * inv_speed
             residual = predicted - observed
             rmse = float(np.sqrt(np.mean(residual**2)))
@@ -342,7 +387,7 @@ class SurfaceEikonalBackend:
             if best is None or (candidate["rmse"], root) < (best["rmse"], best["root_node"]):
                 best = candidate
         if best is None:
-            raise ValueError("No root candidate can reach all calibration vertices")
+            raise ValueError("No identifiable root candidate can reach all calibration vertices")
 
         parameters = EPParameterSet(
             values={

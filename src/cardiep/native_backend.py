@@ -8,7 +8,7 @@ import numpy as np
 
 from .artifacts import write_json_artifact
 from .conduction import resolve_root_schedule
-from .configuration import validate_native_configuration
+from .configuration import validate_native_configuration, validate_parameter_units
 from .discrepancy import DiscrepancyReport, evaluate_observations
 from .ecg import ECGResult, pseudo_ecg
 from .geometry import EPGeometry, load_ep_geometry
@@ -203,6 +203,7 @@ class NativeEikonalBackend:
         )
 
     def simulate(self, request: EPSimulationRequest) -> EPSimulationResult:
+        validate_parameter_units(request.parameters)
         simulation = self._simulate_arrays(
             anatomy_ref=request.anatomy_ref,
             parameters=dict(request.parameters.values),
@@ -232,6 +233,8 @@ class NativeEikonalBackend:
         return report.objective, report
 
     def calibrate(self, request: EPCalibrationRequest) -> EPCalibrationResult:
+        if request.initial_parameters is not None:
+            validate_parameter_units(request.initial_parameters)
         if not request.parameter_bounds:
             raise ValueError("Native calibration requires at least one bounded parameter")
         parameters = dict(request.initial_parameters.values if request.initial_parameters else {})

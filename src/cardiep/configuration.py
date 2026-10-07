@@ -19,11 +19,7 @@ _SPEED_GROUPS = {
     "purkinje_speed": ("purkinje_speed", "purkinje_speed_cm_per_ms"),
 }
 
-_BASE_PARAMETERS = {
-    alias
-    for aliases in _SPEED_GROUPS.values()
-    for alias in aliases
-} | {
+_BASE_PARAMETERS = {alias for aliases in _SPEED_GROUPS.values() for alias in aliases} | {
     "border_zone_speed_scale",
     "scar_speed_scale",
     "apd_ms",
@@ -65,30 +61,19 @@ def validate_native_configuration(
     parameters: dict[str, float],
 ) -> None:
     """Fail closed on native-engine configuration that would be ignored or ambiguous."""
-    dynamic_apd = {
-        f"apd_gradient_{name}"
-        for name in geometry.ventricular_coordinates
-    }
+    dynamic_apd = {f"apd_gradient_{name}" for name in geometry.ventricular_coordinates}
     unknown_parameters = sorted(set(parameters) - _BASE_PARAMETERS - dynamic_apd)
     if unknown_parameters:
-        raise ValueError(
-            "Unknown numpy-eikonal-v1 parameter(s): "
-            + ", ".join(unknown_parameters)
-        )
+        raise ValueError("Unknown numpy-eikonal-v1 parameter(s): " + ", ".join(unknown_parameters))
 
     unknown_settings = sorted(set(settings) - _NATIVE_SETTINGS)
     if unknown_settings:
-        raise ValueError(
-            "Unknown numpy-eikonal-v1 setting(s): "
-            + ", ".join(unknown_settings)
-        )
+        raise ValueError("Unknown numpy-eikonal-v1 setting(s): " + ", ".join(unknown_settings))
 
     for group, aliases in _SPEED_GROUPS.items():
         supplied = [name for name in aliases if name in parameters]
         if len(supplied) > 1:
-            raise ValueError(
-                f"Provide only one alias for {group}: {', '.join(supplied)}"
-            )
+            raise ValueError(f"Provide only one alias for {group}: {', '.join(supplied)}")
 
     if "apd_ms" in parameters:
         conflicting = sorted(
@@ -99,8 +84,7 @@ def validate_native_configuration(
         )
         if conflicting:
             raise ValueError(
-                "apd_ms cannot be combined with APD bounds/gradients: "
-                + ", ".join(conflicting)
+                "apd_ms cannot be combined with APD bounds/gradients: " + ", ".join(conflicting)
             )
     if "apd_min" in parameters and "apd_min_ms" in parameters:
         raise ValueError("Provide only one of apd_min or apd_min_ms")
@@ -121,9 +105,7 @@ def validate_native_configuration(
     else:
         isotropic = _provided(parameters, "isotropic_speed")
         if isotropic:
-            raise ValueError(
-                "isotropic_speed has no effect when a fibre field is present"
-            )
+            raise ValueError("isotropic_speed has no effect when a fibre field is present")
         transverse = _provided(parameters, "transverse_speed")
         if transverse and (geometry.sheet is not None or geometry.normal is not None):
             raise ValueError(
@@ -131,20 +113,16 @@ def validate_native_configuration(
             )
         if transverse:
             redundant = sorted(
-                _provided(parameters, "sheet_speed")
-                + _provided(parameters, "normal_speed")
+                _provided(parameters, "sheet_speed") + _provided(parameters, "normal_speed")
             )
             if redundant:
                 raise ValueError(
                     "sheet/normal speeds are unused when transverse_speed is explicit "
-                    "for fibre-only geometry: "
-                    + ", ".join(redundant)
+                    "for fibre-only geometry: " + ", ".join(redundant)
                 )
 
     scar_parameters = [
-        name
-        for name in ("border_zone_speed_scale", "scar_speed_scale")
-        if name in parameters
+        name for name in ("border_zone_speed_scale", "scar_speed_scale") if name in parameters
     ]
     if scar_parameters and geometry.scar_labels is None:
         raise ValueError(
@@ -154,9 +132,7 @@ def validate_native_configuration(
 
     purkinje_parameters = _provided(parameters, "purkinje_speed")
     if purkinje_parameters and settings.get("purkinje_root_distance_cm") is None:
-        raise ValueError(
-            "purkinje_speed has no effect without purkinje_root_distance_cm"
-        )
+        raise ValueError("purkinje_speed has no effect without purkinje_root_distance_cm")
 
     for name, value in parameters.items():
         if not math.isfinite(float(value)):
@@ -203,3 +179,22 @@ def validate_native_configuration(
         value = settings["max_iterations"]
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValueError("max_iterations must be a positive integer")
+
+
+def validate_parameter_units(parameter_set):
+    """Native values use fixed canonical units; reject contradictory declarations."""
+    for name, unit in parameter_set.units.items():
+        if name not in parameter_set.values:
+            raise ValueError(f"Units declared for absent parameter {name!r}")
+        if "speed" in name:
+            expected = "cm/ms"
+        elif (
+            name.startswith("apd") and not name.startswith("apd_gradient_")
+        ) or name == "activation_offset_ms":
+            expected = "ms"
+        else:
+            expected = "dimensionless"
+        normalized = str(unit).strip().lower()
+        accepted = {"dimensionless", "1", "unitless"} if expected == "dimensionless" else {expected}
+        if normalized not in accepted:
+            raise ValueError(f"Parameter {name!r} must use {expected} units; got {unit!r}")

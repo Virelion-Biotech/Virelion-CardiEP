@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shlex
 import shutil
 import subprocess
@@ -15,6 +16,7 @@ from .models import (
     EPSimulationRequest,
     EPSimulationResult,
 )
+from .provenance import file_sha256, sha256_json, uri_to_path, verify_file_sha256
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,8 @@ class SubprocessEPBackend:
         self.command = shlex.split(command) if isinstance(command, str) else list(command)
         self.executable = executable or (self.command[0] if self.command else None)
         self.timeout_s = float(timeout_s)
+        if not self.command or not self.name.strip() or not math.isfinite(self.timeout_s) or self.timeout_s <= 0:
+            raise ValueError("External backend requires a name, command and finite positive timeout")
 
     def available(self) -> bool:
         return bool(self.executable and shutil.which(self.executable))
@@ -131,10 +135,40 @@ class SubprocessEPBackend:
                     or f"External EP backend exited with {process.returncode}"
                 )
             if output_path.is_file():
-                return json.loads(output_path.read_text(encoding="utf-8"))
+                result = json.loads(output_path.read_text(encoding="utf-8"))
+                return self._persist_artifacts(result, request, root)
             if process.stdout.strip():
-                return json.loads(process.stdout)
+                return self._persist_artifacts(json.loads(process.stdout), request, root)
             raise RuntimeError("External EP backend produced no result JSON")
+
+    @staticmethod
+    def _persist_artifacts(result, request, temporary_root):
+        """Keep wrapper outputs alive after its temporary exchange directory closes."""
+        from urllib.parse import urlparse
+        configured = request.settings.get("output_dir")
+        destination_root = Path(configured).expanduser().resolve() if configured else Path.cwd() / "cardiep_runs" / "external" / sha256_json(request.model_dump(mode="json"))[:16]
+        def visit(value):
+            if isinstance(value, list):
+                return [visit(item) for item in value]
+            if not isinstance(value, dict):
+                return value
+            value = {key: visit(item) for key, item in value.items()}
+            if {"artifact_id", "kind", "uri"} <= set(value) and urlparse(value["uri"]).scheme in {"", "file"}:
+                source = uri_to_path(value["uri"], relative_to=temporary_root)
+                if not source.is_file():
+                    raise FileNotFoundError(f"External artifact does not exist: {source}")
+                verify_file_sha256(source, value.get("sha256"))
+                digest = file_sha256(source)
+                if source.is_relative_to(temporary_root):
+                    destination_root.mkdir(parents=True, exist_ok=True)
+                    destination = destination_root / f"{digest[:16]}-{source.name}"
+                    shutil.copyfile(source, destination)
+                    value["uri"] = destination.resolve().as_uri()
+                else:
+                    value["uri"] = source.as_uri()
+                value["sha256"] = digest
+            return value
+        return visit(result)
 
     def simulate(self, request: EPSimulationRequest) -> EPSimulationResult:
         return EPSimulationResult.model_validate(self._invoke(request))

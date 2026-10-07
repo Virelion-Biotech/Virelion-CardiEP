@@ -261,6 +261,8 @@ def anisotropic_eikonal(
     roots: RootSchedule,
     parameters: dict[str, float],
 ) -> PropagationResult:
+    if np.any(roots.nodes < 0) or np.any(roots.nodes >= geometry.n_nodes):
+        raise ValueError("Root nodes are out of bounds for the EP geometry")
     fibre_speed = _speed(parameters, "fibre_speed", 0.065)
     sheet_speed = _speed(parameters, "sheet_speed", 0.051)
     normal_speed = _speed(parameters, "normal_speed", 0.048)

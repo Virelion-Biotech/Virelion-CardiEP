@@ -9,7 +9,7 @@ It now combines stable cross-service contracts with a real fast EP engine:
 
 - tetrahedral anatomy loading from JSON/NPZ and optional VTK/VTU/Gmsh via `meshio`;
 - direct consumption of CardiAnatomy `AnatomyBundle` artifacts;
-- fibre/sheet/normal anisotropic graph-Eikonal propagation;
+- fibre/sheet/normal anisotropic tetrahedral Hopf–Lax Eikonal propagation;
 - scar-core and border-zone conduction modifiers;
 - explicit ventricular roots, root activation delays, and Purkinje-distance timing;
 - endocardial farthest-point root generation as a declared heuristic;
@@ -240,10 +240,22 @@ See `docs/SCIENTIFIC_VALIDATION.md` for the cross-solver, convergence, provenanc
 
 ## Scientific boundary
 
-The built-in pseudo-ECG is an inverse-distance nodal-dipole proxy in arbitrary normalized units. The built-in propagation model is graph-based Eikonal propagation. Both are useful for fast digital-twin plumbing and inverse-loop screening, but neither establishes clinical validity.
+The built-in pseudo-ECG is an inverse-distance nodal-dipole proxy in arbitrary normalized units. The volumetric propagation model uses tetrahedral Hopf–Lax Eikonal relaxation; the separate surface backend uses graph shortest paths. Both are useful for fast digital-twin plumbing and inverse-loop screening, but neither establishes clinical validity.
 
 Escalate publication-critical claims to an independently verified PDE/ionic backend and perform numerical and empirical validation against the intended dataset and population.
 
 ## License
 
 AGPL-3.0-or-later. External projects retain their own licenses and are not silently vendored.
+
+## CPU audit and reproducible numerical checks
+
+Version 0.3.0 adds independently checked local updates, bounded surface calibration, strict scientific comparison contracts, and durable external artifacts. See [the CPU audit](docs/CPU_AUDIT.md) for evidence and limits. Reproduce the manufactured refinement, analytic planar front, and noiseless inverse recovery with:
+
+```bash
+python -m pip install -e '.[dev,io,reference]'
+python -m pytest --cov=cardiep --cov-report=term-missing
+python scripts/run_cpu_validation.py
+```
+
+These checks need no GPU. They verify numerical implementation and synthetic recovery; they do not establish biological or clinical validity.

@@ -89,9 +89,11 @@ class EPGeometry:
         p2 = xyz[tetra[:, 2]]
         p3 = xyz[tetra[:, 3]]
         volume6 = np.einsum("ij,ij->i", np.cross(p1 - p0, p2 - p0), p3 - p0)
-        scale = max(float(np.max(np.ptp(xyz, axis=0))), 1.0)
-        tolerance = 100.0 * np.finfo(float).eps * scale**3
-        if np.any(np.abs(volume6) <= tolerance):
+        # Local, dimensionless conditioning: unrelated large cells must not
+        # cause a valid small cell to be rejected.
+        scale_product = np.linalg.norm(p1-p0, axis=1) * np.linalg.norm(p2-p0, axis=1) * np.linalg.norm(p3-p0, axis=1)
+        tolerance = 100.0 * np.finfo(float).eps * scale_product
+        if np.any(~np.isfinite(volume6)) or np.any(np.abs(volume6) <= tolerance):
             raise ValueError("tetrahedra contain zero-volume or numerically degenerate cells")
         object.__setattr__(self, "node_xyz_cm", xyz)
         object.__setattr__(self, "tetrahedra", tetra)
@@ -209,13 +211,15 @@ def _meshio_geometry(path: Path, *, unit: str) -> EPGeometry:
             "pip install 'virelion-cardiep[io]'"
         ) from exc
     mesh = meshio.read(path)
-    tetra = None
+    blocks = []
     for block in mesh.cells:
-        if block.type in {"tetra", "tetra10"}:
-            tetra = np.asarray(block.data[:, :4], dtype=int)
-            break
-    if tetra is None:
+        if block.type == "tetra10":
+            raise ValueError("Higher-order tetra10 cells require explicit linear remeshing")
+        if block.type == "tetra":
+            blocks.append(_as_integer_array(block.data, "tetrahedra"))
+    if not blocks:
         raise ValueError(f"No tetrahedral cells found in {path}")
+    tetra = np.vstack(blocks)
     point_data = {str(k).lower(): np.asarray(v) for k, v in mesh.point_data.items()}
 
     def pick(*names: str):
