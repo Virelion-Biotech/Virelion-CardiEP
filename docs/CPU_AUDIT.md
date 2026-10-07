@@ -46,3 +46,5 @@ CI covers Python 3.10–3.14 on Linux, Python 3.12 on Windows, independent SciPy
 The core coverage floor is 70%; it is a regression guard, not a scientific-quality score.
 
 Publication provenance: implementation and CPU evidence committed as `377e150a133a12560940ab4a76d0a5bf1f0efab0`. A clean wheel installation outside the source checkout passed the reference CLI and dependency checks.
+
+Windows CI follow-up: the first expanded run exposed a temporary-path alias defect and two nonportable test URI decoders. These were fixed in `ad446825878b54c5f0842cfe66cf0e2f081f62fb`; the final CI run checks the corrected implementation.
