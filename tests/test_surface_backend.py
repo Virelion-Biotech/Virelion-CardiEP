@@ -15,7 +15,7 @@ from cardiep import (
     EPParameterSet,
     EPSimulationRequest,
 )
-from cardiep.provenance import file_sha256
+from cardiep.provenance import file_sha256, uri_to_path
 
 
 def _artifact(path: Path, *, artifact_id: str, kind: str) -> ArtifactRef:
@@ -117,7 +117,7 @@ def test_surface_backend_simulation_writes_full_activation_map(tmp_path: Path) -
         )
     )
     activation_ref = next(item for item in result.outputs if item.kind == "activation_map")
-    payload = json.loads(Path(activation_ref.uri.removeprefix("file://")).read_text())
+    payload = json.loads(uri_to_path(activation_ref.uri).read_text())
     assert payload["root_node"] == 0
     assert payload["activation_ms"][0] == pytest.approx(5.0)
     assert payload["activation_ms"][1] == pytest.approx(15.0)

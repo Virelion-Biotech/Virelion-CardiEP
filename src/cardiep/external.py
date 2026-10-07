@@ -110,7 +110,7 @@ class SubprocessEPBackend:
         if not self.available():
             raise RuntimeError(f"External EP backend executable is unavailable: {self.executable}")
         with tempfile.TemporaryDirectory(prefix="cardiep-") as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             request_path = root / "request.json"
             output_path = root / "result.json"
             request_path.write_text(
@@ -145,6 +145,7 @@ class SubprocessEPBackend:
     def _persist_artifacts(result, request, temporary_root):
         """Keep wrapper outputs alive after its temporary exchange directory closes."""
         from urllib.parse import urlparse
+        temporary_root = Path(temporary_root).resolve()
         configured = request.settings.get("output_dir")
         destination_root = Path(configured).expanduser().resolve() if configured else Path.cwd() / "cardiep_runs" / "external" / sha256_json(request.model_dump(mode="json"))[:16]
         def visit(value):

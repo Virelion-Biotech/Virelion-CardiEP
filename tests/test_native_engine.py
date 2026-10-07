@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 
 from cardiep import EPAPI, NATIVE_BACKEND_NAME, synthetic_tetra_geometry
+from cardiep.provenance import uri_to_path
 
 
 def _geometry_file(tmp_path: Path) -> Path:
@@ -74,7 +74,7 @@ def test_native_simulation_writes_typed_artifacts(tmp_path: Path) -> None:
     kinds = {item["kind"] for item in result["outputs"]}
     assert {"activation_map", "repolarization_map", "pseudo_ecg", "ep_summary"} <= kinds
     for artifact in result["outputs"]:
-        assert Path(urlparse(artifact["uri"]).path).is_file()
+        assert uri_to_path(artifact["uri"]).is_file()
         assert len(artifact["sha256"]) == 64
 
 

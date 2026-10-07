@@ -27,7 +27,7 @@ The complete deterministic numerical summary is [results.json](../validation/cpu
 - Surface fitting ignored offset bounds and returned an arbitrary speed for unidentifiable equal-distance observations. Unsupported surface parameters/settings and contradictory declared units now fail explicitly.
 - Nonfinite repolarization, cellular, and typed result values were accepted along several public paths.
 - A backend could return conflicting anatomy provenance, including through nested calibration simulations.
-- External wrapper artifact references could point into a deleted temporary directory. Local wrapper outputs now persist and their declared hashes are verified.
+- External wrapper artifact references could point into a deleted temporary directory. Local wrapper outputs now persist and their declared hashes are verified. Temporary paths are resolved before containment checks, including Windows path aliases.
 - Artifact writes now validate JSON before mutation and replace files atomically; unsafe artifact IDs and remote file-URI authorities are rejected.
 - Package, public module, and citation versions were inconsistent; all now declare 0.3.0. Architecture documentation now describes the actual tetrahedral solver.
 
@@ -41,7 +41,7 @@ The Niederer fixture was checked against the table in the [pinned upstream FEniC
 
 ## Continuous verification
 
-CI covers Python 3.10–3.14 on Linux, Python 3.12 on Windows, independent SciPy/meshio references, installed wheel behavior, and CPU numerical reproduction. Local verification: **122 tests passed**, **74.10% statement coverage**, and **14 CardiInfer backend integration tests passed**. Source lint and source/wheel builds passed.
+CI covers Python 3.10–3.14 on Linux, Python 3.12 on Windows, independent SciPy/meshio references, installed wheel behavior, and CPU numerical reproduction. Local verification: **122 tests passed**, **74.12% statement coverage**, and **14 CardiInfer backend integration tests passed**. Source lint and source/wheel builds passed.
 
 The core coverage floor is 70%; it is a regression guard, not a scientific-quality score.
 
