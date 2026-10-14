@@ -24,6 +24,21 @@ It now combines stable cross-service contracts with a real fast EP engine:
 
 > CardiEP is research software. The native backend is deliberately a **fast integration/reference model**, not a replacement for validated monodomain/bidomain solvers and not a clinical device.
 
+
+<!-- VALIDATION_PRODUCT_STATUS:BEGIN -->
+## Validation and product completion status
+
+**Reviewed 2026-10-14; implementation base `2bcdd1ec2e28`.** **Status: Analytical/numerical reference evidence; empirical EP qualification incomplete.** This is an evidence-backed scope assessment, not a percentage-complete estimate or a declaration that the product is finished.
+
+| Area | Current evidence / remaining gate |
+|---|---|
+| Software / operational checks | Automated test sources and CI definitions are present; this documentation audit does not report a new algorithm/data-validation run. |
+| Scientific or domain evidence | The fast Eikonal/pseudo-ECG reference and solver-neutral comparison layer have CPU checks. A numerical comparison or software gate does not qualify physiological or clinical predictions. |
+| Remaining for the declared product scope | Complete intended-backend cross-solver/mesh/time convergence and ionic/PDE qualification; calibrate against registered measured activation/repolarization/ECG data; validate held-out observables/subjects and noise/discrepancy models; qualify performance and durable backend execution for the declared scope. |
+
+Evidence and limits: [repository report](docs/CPU_AUDIT.md). The [organization status index](https://github.com/Virelion-Biotech/Virelion-HeartTwin/blob/main/docs/STACK_VALIDATION_STATUS.md) separates software, numerical, data-readiness and empirical qualification. Code/schema execution or a completed download is not a substitute for endpoint-specific validation.
+<!-- VALIDATION_PRODUCT_STATUS:END -->
+
 ## Install
 
 Core engine:
