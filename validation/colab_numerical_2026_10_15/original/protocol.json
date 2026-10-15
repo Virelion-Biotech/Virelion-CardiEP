@@ -1,0 +1,63 @@
+{
+  "environment_sha256": "f4760924fa8f646550e9a99e1c40642ef474fa3e90ce06faa3b83245a5d78bb0",
+  "fitness": "FIT for the named analytical/numerical checks only.",
+  "handler": "numerical",
+  "jobs": {
+    "Virelion-CardiEP": [
+      [
+        "scripts/run_cpu_validation.py",
+        [
+          "--output",
+          "OUTPUT"
+        ]
+      ]
+    ]
+  },
+  "launcher_sha256": {
+    "runtime.py": "42099bbb908333a480c11eca9f0586759d57162a1c11b977067a9696c45d0985",
+    "training.py": "c63aee5893f194932f786c5054bd5ff5938bde40a69328d43fd39fb8b0faf112",
+    "worker.py": "76a8b3ddbe6411bea07d353948f7bed3a708ddd3dd46624e6569c377b3eb88b3"
+  },
+  "limits": "No independent patient LAT truth or bidomain/monodomain tissue-scale equivalence claim.",
+  "name": "13_CardiEP_Numerical",
+  "repo_paths": {
+    "Virelion-CardiEP": "/content/13_CardiEP_Numerical_v1/Virelion-CardiEP"
+  },
+  "repos": {
+    "Virelion-CardiEP": "2bcdd1ec2e282c1986d91459a0c39cea5b3ade15"
+  },
+  "requirements": [
+    "numba==0.61.2",
+    "llvmlite==0.44.0",
+    "numpy==2.2.6",
+    "scipy==1.15.3",
+    "pandas==2.2.3",
+    "scikit-learn==1.6.1",
+    "pydantic==2.11.7",
+    "pyyaml==6.0.2",
+    "requests==2.32.4",
+    "matplotlib==3.10.1",
+    "seaborn==0.13.2",
+    "click==8.1.8",
+    "jinja2==3.1.6",
+    "opencv-python-headless==4.12.0.88",
+    "tifffile==2025.6.11",
+    "pillow==11.3.0",
+    "defusedxml==0.7.1",
+    "openpyxl==3.1.5",
+    "meshio==5.3.5",
+    "nibabel==5.3.2",
+    "pydicom==3.0.1",
+    "arviz==0.21.0",
+    "xarray==2025.3.1",
+    "wfdb==4.2.0",
+    "jsonschema==4.24.0"
+  ],
+  "run_root": "/content/drive/MyDrive/HeartTwinValidation/13_CardiEP_Numerical_v1",
+  "scope": "Planar-front/eikonal numerical checks, convergence and synthetic inverse recovery.",
+  "session_seconds": 8100,
+  "source_archive_sha256": {
+    "Virelion-CardiEP": "dbe61239efc3491b4cc2da802708d76855d88ca3236538763b543bace57162b0"
+  },
+  "title": "CardiEP numerical verification"
+}

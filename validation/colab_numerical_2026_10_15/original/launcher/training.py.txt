@@ -1,0 +1,94 @@
+"""Native CardiGINO benchmark with persistent mid-epoch model/optimizer/RNG state."""
+from runtime import *
+from worker import module
+import copy, random, collections
+
+def save_checkpoint(path,payload,torch):
+ path=Path(path);temporary=path.with_name(path.name+'.partial');torch.save(payload,temporary)
+ with temporary.open('rb') as f:os.fsync(f.fileno())
+ os.replace(temporary,path)
+
+def train(r):
+ import numpy as np,torch
+ from cardisim.cardigino import CardiGINO,CardiGINOConfig
+ from cardisim.benchmarking import geometry_fingerprint,geometry_group_split_indices
+ native=module(r.repos['Virelion-CardiSim']/'scripts/train_cardigino.py','gino_native')
+ torch.set_num_threads(min(4,os.cpu_count() or 1));device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ if device.type!='cuda' and not r.protocol.get('smoke',False):raise RuntimeError('Select a T4 GPU runtime. CPU smoke testing is not the full benchmark.')
+ raw=[];sources=[];ids=[]
+ for item in r.protocol['shards']:
+  if r.paused():return 'PAUSED'
+  p=download(item['url'],r.data/item['key'],item['checksum'].split(':')[1],algorithm='md5',size=item['size'])
+  # Producer-verified scientific PyTorch pickle; only the pinned author dataset is loaded.
+  cases=native.load_shard(p,None,torch)
+  selected=random.Random(r.protocol['selection_seed']).sample(range(len(cases)),min(r.protocol['cases_per_shard'],len(cases)))
+  for i in sorted(selected):
+   a,pos,y=native.case_arrays(cases[i],torch)
+   geometry=geometry_fingerprint(pos.numpy());ids.append(geometry)
+   n=len(pos);indices=np.random.default_rng(r.protocol['selection_seed']+i).choice(n,min(n,r.protocol['max_nodes']),replace=False)
+   raw.append({'a':a[indices],'input_geom':pos[indices],'y':y[indices]});sources.append({'shard':item['key'],'case':i,'geometry':geometry,'source_nodes':n,'scored_nodes':len(indices)})
+  del cases
+ tr,va,te,groups=geometry_group_split_indices(ids,r.protocol['split_seed'])
+ split={'train':tr,'validation':va,'test':te,'cases':sources,'groups':groups,'fingerprint_limits':'translation/scale/row invariant; not rotation invariant; sampled geometric hash, not universal equivalence'}
+ atomic_json(r.out/'split.json',split)
+ stats=native.fit_stats([raw[i] for i in tr],torch,r.protocol['max_nodes'],r.protocol['split_seed'])
+ train_cases=[native.make_case(raw[i],stats,torch) for i in tr];val_cases=[native.make_case(raw[i],stats,torch) for i in va];test_cases=[native.make_case(raw[i],stats,torch) for i in te]
+ split_hash=digest(r.out/'split.json');env={'torch':torch.__version__,'numpy':np.__version__,'python':platform.python_version(),'device_type':device.type,'environment':r.protocol['environment_sha256']}
+ config=CardiGINOConfig(**{**r.protocol['model'],'modes':tuple(r.protocol['model']['modes'])})
+ for seed in r.protocol['seeds']:
+  done=r.out/(f'seed-{seed}.json');checkpoint=r.state/(f'seed-{seed}.pt')
+  receipt=r.state/(f'seed-{seed}-complete.json')
+  if done.exists():
+   if not receipt.exists():raise ValueError('Unreceipted completed seed')
+   saved=json.loads(receipt.read_text())
+   if saved['identity']!=r.identity or saved['split_hash']!=split_hash or saved['environment']!=env or saved['metrics_sha256']!=digest(done):raise ValueError('Completed seed data/environment/artifact mismatch')
+   continue
+  random.seed(seed);np.random.seed(seed);torch.manual_seed(seed)
+  if device.type=='cuda':torch.cuda.manual_seed_all(seed)
+  model=CardiGINO(config).to(device);opt=torch.optim.AdamW(model.parameters(),lr=1e-3,weight_decay=1e-4)
+  epoch=1;cursor=0;loss_sum=0.;history=[];best=float('inf');best_state=None;best_epoch=0;stale=0
+  if checkpoint.exists():
+   s=torch.load(checkpoint,map_location='cpu',weights_only=False)
+   if s['identity']!=r.identity or s['split_hash']!=split_hash or s['environment']!=env:raise ValueError('Checkpoint protocol/data/environment mismatch. Use the same environment or a new RUN_LABEL.')
+   model.load_state_dict(s['model']);opt.load_state_dict(s['optimizer']);epoch=s['epoch'];cursor=s['cursor'];loss_sum=s['loss_sum'];history=s['history'];best=s['best'];best_state=s['best_state'];best_epoch=s['best_epoch'];stale=s['stale']
+   random.setstate(s['python_rng']);np.random.set_state(s['numpy_rng']);torch.set_rng_state(s['torch_rng'])
+   if device.type=='cuda':torch.cuda.set_rng_state_all(s['cuda_rng'])
+   print('Resume seed',seed,'epoch',epoch,'next training case',cursor,flush=True)
+  def save():
+   save_checkpoint(checkpoint,{'identity':r.identity,'split_hash':split_hash,'environment':env,'model':model.state_dict(),'optimizer':opt.state_dict(),'epoch':epoch,'cursor':cursor,'loss_sum':loss_sum,'history':history,'best':best,'best_state':best_state,'best_epoch':best_epoch,'stale':stale,'python_rng':random.getstate(),'numpy_rng':np.random.get_state(),'torch_rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all() if device.type=='cuda' else []},torch)
+  last_save=time.monotonic()
+  while epoch<=r.protocol['epochs'] and stale<r.protocol['patience']:
+   model.train()
+   for j in range(cursor,len(train_cases)):
+    a,pos,y=(x.to(device) for x in train_cases[j]);opt.zero_grad(set_to_none=True);loss=torch.nn.functional.mse_loss(model(a,pos),y)
+    if not torch.isfinite(loss):raise ValueError('Non-finite training loss')
+    loss.backward();opt.step();loss_sum+=float(loss.item());cursor=j+1
+    pause=r.paused()
+    if time.monotonic()-last_save>=120 or pause:save();last_save=time.monotonic()
+    if pause:return 'PAUSED'
+   value=native.evaluate(model,val_cases,stats,device,torch)
+   history.append({'epoch':epoch,'train_mse_normalized':loss_sum/len(train_cases),'validation':value})
+   if value['rmse']<best:best=value['rmse'];best_state=copy.deepcopy({k:v.cpu() for k,v in model.state_dict().items()});best_epoch=epoch;stale=0
+   else:stale+=1
+   epoch+=1;cursor=0;loss_sum=0.;save();print('seed',seed,'completed epoch',epoch-1,'validation RMSE',value['rmse'],flush=True)
+   if r.paused():return 'PAUSED'
+  if best_state is None:raise ValueError('No fitted validation-selected model')
+  model.load_state_dict(best_state);test=native.evaluate(model,test_cases,stats,device,torch);baseline=native.baseline(test_cases,stats,torch)
+  case_metrics=[]
+  for idx,c in zip(te,test_cases):case_metrics.append({'case_index':idx,'geometry':ids[idx],'model':native.evaluate(model,[c],stats,device,torch),'baseline':native.baseline([c],stats,torch)})
+  # Geometry-cluster bootstrap of case-level errors, not independent node resampling.
+  grouped=collections.defaultdict(list)
+  for x in case_metrics:grouped[x['geometry']].append(x['model']['rmse'])
+  vals=np.array([np.mean(x) for x in grouped.values()]);rng=np.random.default_rng(1729)
+  boot=np.array([rng.choice(vals,len(vals),replace=True).mean() for _ in range(1000)])
+  result={'scope':r.protocol['scope'],'seed':seed,'environment':env,'test':test,'training_mean_baseline_test':baseline,'case_metrics':case_metrics,'geometry_mean_case_rmse':float(vals.mean()),'geometry_bootstrap_95_interval':np.quantile(boot,[.025,.975]).tolist(),'best_epoch':best_epoch,'history':history,'clinical_validation':False,'paper_reproduction':False}
+  def finite(x):
+   if isinstance(x,float) and not np.isfinite(x):return None
+   if isinstance(x,dict):return {k:finite(v) for k,v in x.items()}
+   if isinstance(x,list):return [finite(v) for v in x]
+   return x
+  save_checkpoint(r.state/(f'best-{seed}.pt'),{'model':best_state,'config':config.__dict__,'stats':stats,'split':split,'identity':r.identity},torch)
+  atomic_json(done,finite(result))
+  atomic_json(receipt,{'identity':r.identity,'split_hash':split_hash,'environment':env,'metrics_sha256':digest(done)})
+ atomic_json(r.out/'summary.json',{'seeds':[json.loads((r.out/f'seed-{s}.json').read_text()) for s in r.protocol['seeds']],'scope':r.protocol['scope'],'empirical_clinical_validation':False})
+ return 'COMPLETE_SIMULATED'

@@ -1,0 +1,12 @@
+COMMAND ['/usr/bin/python3', '-m', 'venv', '--without-pip', '/content/13_CardiEP_Numerical_v1/venv']
+COMMAND ['/usr/bin/python3', '-m', 'pip', '--python', '/content/13_CardiEP_Numerical_v1/venv/bin/python', 'install', '--quiet', 'pip==25.2', 'setuptools==80.9.0', 'wheel==0.45.1', 'build==1.2.2.post1', 'hatchling==1.27.0', 'editables==0.5']
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 23.0 MB/s eta 0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 55.9 MB/s eta 0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 72.5/72.5 kB 5.8 MB/s eta 0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 75.8/75.8 kB 5.6 MB/s eta 0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 130.0/130.0 kB 8.9 MB/s eta 0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 57.3/57.3 kB 3.4 MB/s eta 0:00:00
+COMMAND ['/content/13_CardiEP_Numerical_v1/venv/bin/python', '-m', 'pip', 'install', '--quiet', 'numba==0.61.2', 'llvmlite==0.44.0', 'numpy==2.2.6', 'scipy==1.15.3', 'pandas==2.2.3', 'scikit-learn==1.6.1', 'pydantic==2.11.7', 'pyyaml==6.0.2', 'requests==2.32.4', 'matplotlib==3.10.1', 'seaborn==0.13.2', 'click==8.1.8', 'jinja2==3.1.6', 'opencv-python-headless==4.12.0.88', 'tifffile==2025.6.11', 'pillow==11.3.0', 'defusedxml==0.7.1', 'openpyxl==3.1.5', 'meshio==5.3.5', 'nibabel==5.3.2', 'pydicom==3.0.1', 'arviz==0.21.0', 'xarray==2025.3.1', 'wfdb==4.2.0', 'jsonschema==4.24.0']
+COMMAND ['/content/13_CardiEP_Numerical_v1/venv/bin/python', '-m', 'pip', 'install', '--quiet', '--no-deps', '--no-build-isolation', '-e', '/content/13_CardiEP_Numerical_v1/Virelion-CardiEP']
+COMMAND ['/content/13_CardiEP_Numerical_v1/venv/bin/python', '-m', 'pip', 'check']
+No broken requirements found.

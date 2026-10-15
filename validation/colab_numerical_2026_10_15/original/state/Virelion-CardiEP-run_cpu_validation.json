@@ -1,0 +1,12 @@
+{
+  "artifacts": {
+    "logs/Virelion-CardiEP-run_cpu_validation.txt": "e276c28a59fd42d51400b9304ecce7212010dbc8c973faaec9d31cc022606bad",
+    "results/Virelion-CardiEP-run_cpu_validation-execution.json": "a2552ae7c2d7a62532574b89e23588e562ec0b1f61f82494a90420e0ffd19d14",
+    "results/Virelion-CardiEP-run_cpu_validation.json": "c5c5bba6f44f50b732ecf3976760d82a574f214b0e7ecaa21cd9376e99ba8f14"
+  },
+  "identity": "107a6b280477730186425ad513fe95d8175c5d7b7a3664a43b64825dca0c8094",
+  "result": {
+    "log": "logs/Virelion-CardiEP-run_cpu_validation.txt",
+    "returncode": 0
+  }
+}

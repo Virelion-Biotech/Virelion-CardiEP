@@ -1,0 +1,10 @@
+{
+  "command": [
+    "/content/13_CardiEP_Numerical_v1/venv/bin/python",
+    "/content/13_CardiEP_Numerical_v1/Virelion-CardiEP/scripts/run_cpu_validation.py",
+    "--output",
+    "/content/drive/MyDrive/HeartTwinValidation/13_CardiEP_Numerical_v1/results/Virelion-CardiEP-run_cpu_validation.json"
+  ],
+  "returncode": 0,
+  "seconds": 101.54988615899993
+}

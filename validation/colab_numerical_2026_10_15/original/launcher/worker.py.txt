@@ -1,0 +1,262 @@
+"""Adapters to the pinned repositories; no uploads or GitHub writes."""
+from runtime import *
+import importlib.util, collections, csv, gzip, re
+
+def module(path,name='adapter'):
+ spec=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(spec);sys.modules[name]=m;spec.loader.exec_module(m);return m
+
+def ready(r,name,reason,extra=None):
+ payload={'status':'READINESS_ONLY','empirical_validation':False,'blocked_endpoints':reason,**(extra or {})}
+ atomic_json(r.out/(name+'.json'),payload);return payload
+
+def qtdb(r):
+ import wfdb
+ m=module(r.repos['Virelion-ElectroTrace']/'scripts/validate_qtdb.py','qt_adapter');p=m.load_locked_protocol()
+ base='https://physionet.org/files/qtdb/1.0.0/';d=r.data/'qtdb'
+ hashes=download(base+'SHA256SUMS.txt',d/'SHA256SUMS.txt',r.protocol['hash_manifest'])
+ lookup={line.split()[1].lstrip('*'):line.split()[0] for line in hashes.read_text().splitlines() if len(line.split())==2}
+ download(base+'RECORDS',d/'RECORDS',lookup['RECORDS'])
+ names=(d/'RECORDS').read_text().split();assert len(names)==105
+ q2={n for n in names if n+'.q2c' in lookup};assert len(q2)==11
+ detector=m.load_detector(p['secondary_end_to_end']['detector'])
+ rows=[]
+ for n in names:
+  if r.paused():return 'PAUSED'
+  def one():
+   for ext in ['hea','dat','q1c']+(['q2c'] if n in q2 else []):download(base+n+'.'+ext,d/(n+'.'+ext),lookup[n+'.'+ext])
+   result=m.evaluate_record(wfdb,d,n,protocol=p,detector=detector,has_q2c=n in q2)
+   atomic_json(r.out/('record-'+n+'.json'),result);return result
+  rows.append(r.task('qtdb-'+n,one))
+ b=p['uncertainty'];opts=dict(replicates=b['bootstrap_replicates'],seed=b['seed'],interval=tuple(b['interval_percent']))
+ tol=p['primary_endpoint']['tolerances_ms']
+ atomic_json(r.out/'summary.json',{'scope':r.protocol['scope'],'records':len(rows),'primary_oracle_assisted':m.aggregate_primary_curve(rows,tol,**opts),'secondary_signal_only':m.aggregate_secondary(rows,tol,**opts),'interobserver':m.aggregate_interobserver([x for x in rows if x['interobserver']],tol,**opts),'locked_protocol':p})
+ return 'COMPLETE'
+
+def ludb(r):
+ import wfdb,numpy as np
+ m=module(r.repos['Virelion-ElectroTrace']/'scripts/validate_qtdb.py','ludb_adapter')
+ base='https://physionet.org/files/ludb/1.0.1/';d=r.data/'ludb'
+ manifest=download(base+'SHA256SUMS.txt',d/'SHA256SUMS.txt',r.protocol['hash_manifest'])
+ lookup={line.split()[1].lstrip('*'):line.split()[0] for line in manifest.read_text().splitlines() if len(line.split())==2}
+ download(base+'RECORDS',d/'RECORDS',lookup['RECORDS']);names=(d/'RECORDS').read_text().split();assert len(names)==200
+ leads=['i','ii','iii','avr','avl','avf','v1','v2','v3','v4','v5','v6'];tol=[20.,40.,60.,80.,100.];rows=[]
+ for name in names:
+  if r.paused():return 'PAUSED'
+  def one():
+   for ext in ['hea','dat',*leads]:download(base+name+'.'+ext,d/(name+'.'+ext),lookup[name+'.'+ext])
+   rec=wfdb.rdrecord(str(d/name));assert rec.fs==500 and rec.p_signal.shape==(5000,12)
+   perlead={}
+   for lead in leads:
+    channel=[x.lower() for x in rec.sig_name].index(lead);signal=rec.p_signal[:,channel]
+    ann=wfdb.rdann(str(d/name),lead);on=[];off=[]
+    if len(ann.symbol)%3:raise ValueError('Unexpected LUDB annotation layout')
+    for j in range(0,len(ann.symbol),3):
+     symbols=ann.symbol[j:j+3]
+     if symbols[0]!='(' or symbols[2]!=')' or symbols[1] not in ['p','N','t']:raise ValueError('Unexpected annotation triplet')
+     if symbols[1]=='N':
+      a,b=map(int,[ann.sample[j],ann.sample[j+2]])
+      if not 0<=a<b<len(signal):raise ValueError('Invalid annotated QRS support')
+      on.append(a);off.append(b)
+    if not on:raise ValueError('No annotated QRS on '+lead)
+    on=np.array(on);off=np.array(off);err=m.delineation_errors(signal,rec.fs,(on+off)//2,on,off)
+    perlead[lead]={'primary':{'reference_qrs':len(on),'onset_found':int(err['onset_found'].sum()),'offset_found':int(err['offset_found'].sum()),'both_found':int((err['onset_found']&err['offset_found']).sum()),'tolerance_counts':m.tolerance_counts(err['onset_errors_ms'],err['offset_errors_ms'],err['onset_found'],err['offset_found'],tol)},'onset_error_ms':err['onset_errors_ms'].tolist(),'offset_error_ms':err['offset_errors_ms'].tolist()}
+   result={'record':name,'leads':perlead};atomic_json(r.out/('patient-'+Path(name).name+'.json'),result);return result
+  rows.append(r.task('ludb-'+Path(name).name,one))
+ opts=dict(replicates=2000,seed=1729,interval=(2.5,97.5))
+ summaries={lead:m.aggregate_primary_curve([x['leads'][lead] for x in rows],tol,**opts) for lead in leads}
+ # Patient is the resampling unit; do not bootstrap 2,400 leads independently.
+ pooled=[]
+ for x in rows:
+  vals=[x['leads'][lead]['primary'] for lead in leads];primary={k:sum(v[k] for v in vals) for k in ['reference_qrs','onset_found','offset_found','both_found']}
+  primary['tolerance_counts']={key:{k:sum(v['tolerance_counts'][key][k] for v in vals) for k in vals[0]['tolerance_counts'][key]} for key in vals[0]['tolerance_counts']};pooled.append({'primary':primary})
+ atomic_json(r.out/'summary.json',{'scope':r.protocol['scope'],'n_patients':200,'n_leads':2400,'oracle_assisted':True,'per_lead':summaries,'all_leads_patient_clustered':m.aggregate_primary_curve(pooled,tol,**opts),'lead_selector_qualification':False,'end_to_end_detection_evaluated':False})
+ return 'COMPLETE_SCOPED'
+
+def bbbc(r):
+ repo=r.repos['Virelion-OptiCell'];sys.path.insert(0,str(repo));m=module(repo/'scripts/run_bbbc039_validation.py','bb_adapter')
+ for kind in ['IMAGES','MASKS','METADATA']:
+  item=r.protocol['files'][kind];p=download(item['url'],r.data/(kind+'.zip'),item['sha256']);dest=r.data/kind
+  if not (dest/'EXTRACTION_COMPLETE').exists():unzip(p,dest);(dest/'EXTRACTION_COMPLETE').write_text(digest(p))
+ test=next((r.data/'METADATA').rglob('test.txt')).read_text().split();stems={Path(x).stem for x in test};assert len(stems)==50
+ pairs=[(i,t) for i,t in m.find_pairs(r.data/'IMAGES',r.data/'MASKS') if i.stem in stems]
+ assert len(pairs)==50 and len({i.stem for i,t in pairs})==50
+ rows=[]
+ for backend in ['threshold','adaptive']:
+  for i,t in pairs:
+   if r.paused():return 'PAUSED'
+   def one():
+    gray=m.load_image_gray(i);truth=m.decode_bbbc039_mask(t);seg=m.segment_threshold(gray,adaptive=backend=='adaptive')
+    row={'image':i.name,'backend':backend,'image_sha256':digest(i),'mask_sha256':digest(t),'truth_count':int(truth.max()),**m.paired_segmentation_metrics(seg.labels,truth)}
+    row=m.json_ready_metrics(row);atomic_json(r.out/(backend+'-'+i.stem+'.json'),row);return row
+   rows.append(r.task(backend+'-'+i.stem,one))
+ atomic_json(r.out/'summary.json',m.json_ready_metrics({'scope':r.protocol['scope'],'official_test_stems':sorted(stems),'rows':rows,'by_backend':{b:m.aggregate_segmentation_rows([x for x in rows if x['backend']==b]) for b in ['threshold','adaptive']}}))
+ return 'COMPLETE'
+
+def livecell(r):
+ repo=r.repos['Virelion-OptiCell'];sys.path.insert(0,str(repo));m=module(repo/'scripts/run_livecell_validation.py','lc_adapter')
+ from qc_pipeline import segment_threshold
+ from validation import paired_segmentation_metrics,json_ready_metrics,aggregate_segmentation_rows
+ archive=download(m.LIVECELL_IMAGES_URL,r.data/'images.zip');dest=r.data/'images'
+ if not (dest/'EXTRACTION_COMPLETE').exists():unzip(archive,dest);(dest/'EXTRACTION_COMPLETE').write_text(digest(archive))
+ index=m.build_image_index(dest)
+ for split in ['val','test']:
+  source=download(m.LIVECELL_ANN_URLS[split],r.data/(split+'.json')) if hasattr(m,'LIVECELL_ANN_URLS') else download('https://livecell-dataset.s3.eu-central-1.amazonaws.com/LIVECell_dataset_2021/annotations/LIVECell/livecell_coco_'+split+'.json',r.data/(split+'.json'))
+  data=json.loads(source.read_text());anns=collections.defaultdict(list)
+  for ann in data['annotations']:anns[ann['image_id']].append(ann)
+  rows=[]
+  for image in sorted(data['images'],key=lambda x:x['id']):
+   for b in ['threshold','adaptive']:
+    if r.paused():return 'PAUSED'
+    name=split+'-'+b+'-'+str(image['id'])
+    def one():
+     import cv2
+     from qc_pipeline import to_grayscale_uint8
+     path=index[Path(image['file_name']).name];raw=cv2.imread(str(path),cv2.IMREAD_UNCHANGED)
+     if raw is None:raise ValueError('Unreadable image '+str(path))
+     gray=to_grayscale_uint8(raw)
+     truth=m.decode_coco_instance_masks(anns[image['id']],image['height'],image['width'])
+     if gray.shape!=truth.shape:raise ValueError('Shape disagreement')
+     seg=segment_threshold(gray,adaptive=b=='adaptive')
+     row=json_ready_metrics({'image_id':image['id'],'file_name':image['file_name'],'backend':b,'cell_type':Path(image['file_name']).name.split('_')[0],'image_sha256':digest(path),'annotation_count':len(anns[image['id']]),**paired_segmentation_metrics(seg.labels,truth)})
+     atomic_json(r.out/(name+'.json'),row);return row
+    rows.append(r.task(name,one))
+  atomic_json(r.out/(split+'-summary.json'),json_ready_metrics({'scope':r.protocol['scope'],'n_images':len(data['images']),'by_backend':{b:aggregate_segmentation_rows([x for x in rows if x['backend']==b]) for b in ['threshold','adaptive']},'rows':rows}))
+ return 'COMPLETE'
+
+def ctc(r):
+ url='https://data.celltrackingchallenge.net/training-datasets/Fluo-N2DH-GOWT1.zip'
+ p=download(url,r.data/'Fluo-N2DH-GOWT1.zip');dest=r.data/'ctc'
+ if not (dest/'EXTRACTION_COMPLETE').exists():unzip(p,dest);(dest/'EXTRACTION_COMPLETE').write_text(digest(p))
+ for b in ['threshold','adaptive']:
+  if r.paused():return 'PAUSED'
+  r.task('ctc-'+b,lambda:r.command('ctc-'+b,[sys.executable,r.repos['Virelion-OptiCell']/'scripts/run_ctc_cloud_validation.py','--data-dir',dest,'--out-dir',r.out/b,'--datasets','Fluo-N2DH-GOWT1','--backend',b],cwd=r.repos['Virelion-OptiCell']))
+ return 'COMPLETE'
+
+def vex(r):
+ repo=r.repos['Virelion-CardiVex'];m=module(repo/'scripts/download_validation_data.py','vex_download')
+ for name,(series,sha) in m.ARCHIVES.items():download('https://ftp.ncbi.nlm.nih.gov/geo/series/'+series+'/suppl/'+name,r.data/name,sha)
+ local=repo/'data';local.mkdir(exist_ok=True)
+ for name in m.ARCHIVES:
+  target=local/name
+  if not target.exists():target.symlink_to(r.data/name)
+ for script in ['run_full_validation.py','run_improved_classification.py','run_next_validation_bundle.py']:
+  if r.paused():return 'PAUSED'
+  # Distinct directories prevent one task from overwriting another task's results.
+  name=Path(script).stem
+  r.task(name,lambda:r.command(name,[sys.executable,repo/'scripts'/script,'--output-dir',r.out/name],cwd=repo))
+ return 'COMPLETE'
+
+def myo(r):
+ repo=r.repos['Virelion-MyoTrace'];manifest=json.loads((repo/'validation/cpu/public_sources.json').read_text())
+ for movie in manifest['movies']:download(movie['url'],r.data/movie['name'],movie['sha256'],size=movie['size'])
+ jobs=[]
+ for movie in manifest['movies']:
+  label=Path(movie['name']).stem
+  single=r.data/(label+'-manifest.json');atomic_json(single,{**manifest,'movies':[movie]})
+  jobs.append(('movie-'+label,'validate_public_videos.py',['--manifest',single,'--data',r.data,'--out',r.out/label]))
+ jobs.append(('analytic-recovery','validate_recovery_cpu.py',['--out',r.out/'recovery']))
+ for name,script,args in jobs:
+  if r.paused():return 'PAUSED'
+  r.task(name,lambda:r.command(name,[sys.executable,repo/'scripts'/script,*args],cwd=repo))
+ if 'structure_file' in r.protocol:
+  item=r.protocol['structure_file'];p=download(item['url'],r.data/item['key'],item['checksum'].split(':')[1],algorithm='md5',size=item['size'])
+  with zipfile.ZipFile(p) as z:members=z.namelist()
+  ready(r,'sarcomere-label-inventory',['Independent beat-event, force, strain and maturation labels are absent from this selected structural validation archive; MyoTrace has no frozen sarcomere mask/length prediction adapter.'],{'archive_members':members,'structural_labels_available':True})
+ return 'COMPLETE_SCOPED'
+
+def score(r):
+ p=download('https://cipaproject.org/wp-content/uploads/2018/09/Blinova_etal_2018_data.xlsx',r.data/'Blinova_etal_2018_data.xlsx',r.protocol['workbook_sha256'])
+ os.environ['CARDIOSCORE_PUBLISH']='0';repo=r.repos['Virelion-CardioScore'];sys.path.insert(0,str(repo))
+ m=module(repo/'scripts/validation/run_colab_validation.py','score_audit');derived=r.out/'reference';derived.mkdir(exist_ok=True)
+ result=m.run_blinova(p,derived);atomic_json(r.out/'source-audit.json',result)
+ ready(r,'qualification',['Workbook has aggregate endpoints, missing/ambiguous labels and no raw MEA waveforms; a six-endpoint score input, frozen score-to-probability calibration and independent raw-waveform truth cannot be constructed honestly from this source.'])
+ return 'READINESS_ONLY'
+
+def geo(r):
+ reports=[]
+ for acc in r.protocol['accessions']:
+  if r.paused():return 'PAUSED'
+  family=acc[:-3]+'nnn';url=f'https://ftp.ncbi.nlm.nih.gov/geo/series/{family}/{acc}/soft/{acc}_family.soft.gz'
+  p=download(url,r.data/(acc+'_family.soft.gz'))
+  samples=[];current=None;series=[]
+  with gzip.open(p,'rt',errors='strict') as f:
+   for line in f:
+    line=line.rstrip()
+    if line.startswith('^SAMPLE = '):
+     current={'sample_accession':line.split(' = ',1)[1],'metadata':{}};samples.append(current)
+    elif line.startswith('!Sample_') and ' = ' in line and current is not None:
+     k,v=line.split(' = ',1);current['metadata'].setdefault(k,[]).append(v)
+    elif line.startswith('!Series_') and ' = ' in line:series.append(line)
+  # Preserve source fields; never manufacture animal IDs from sample IDs.
+  report={'accession':acc,'n_samples':len(samples),'samples':samples,'series_metadata':series,'sha256':digest(p),'eligibility':'NOT_APPROVED','requires':['independent animal/donor mapping','condition and age/timepoint mapping','study/subject-disjoint split','locked ortholog/gene universe','orthogonal phenotype ground truth'],'source_links':[x for x in series if 'supplementary_file' in x]}
+  atomic_json(r.out/(acc+'-source-readiness.json'),report);reports.append({'accession':acc,'n_samples':len(samples)})
+ ready(r,'cohort-fit',r.protocol['blockers'],{'sources':reports})
+ return 'READINESS_ONLY'
+
+def dccp(r):
+ repo=r.repos['Virelion-DCCP'];sys.path.insert(0,str(repo/'src'));m=module(repo/'scripts/fetch_host_subset.py','dccp_fetch')
+ fixture=json.loads((repo/'validation/data/GSE240848_host_subset.json').read_text());lookup={Path(x['url']).name:x['sha256'] for x in fixture['source_files']}
+ cache=repo/'.data-cache';cache.mkdir(exist_ok=True)
+ for name,sha in lookup.items():
+  p=download(m.BASE+name,r.data/name,sha)
+  if not (cache/name).exists():(cache/name).symlink_to(p)
+ r.task('matrix-integrity',lambda:r.command('matrix-integrity',[sys.executable,repo/'scripts/fetch_host_subset.py'],cwd=repo))
+ shutil.copy2(repo/'validation/data/GSE240848_host_subset.json',r.out/'host_subset.json')
+ ready(r,'severity-fit',['Rat ischemia/reperfusion matrix supports ingestion checks; no verified independent animal mapping and orthogonal DCCP severity labels. Pooling cells does not create biological replicates.'])
+ return 'READINESS_ONLY'
+
+def argo(r):
+ import concurrent.futures,wfdb,numpy as np
+ base='https://physionet.org/files/argo/1.0.0/';manifest=download(base+'SHA256SUMS.txt',r.data/'SHA256SUMS.txt',r.protocol['hash_manifest'])
+ files=[line.split() for line in manifest.read_text().splitlines() if len(line.split())==2]
+ selected=[(sha,path.lstrip('*')) for sha,path in files if re.match(r'ARGODataset_Folder/Pt[1-9]/',path.lstrip('*')) or path.lstrip('*') in ['ANNOTATORS','Additional_subject_data.csv','RECORDS','README.txt']]
+ for start in range(0,len(selected),24):
+  if r.paused():return 'PAUSED'
+  with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+   futures=[pool.submit(download,base+path,r.data/path,sha) for sha,path in selected[start:start+24]]
+   for future in futures:future.result()
+  print('ARGO files',min(start+24,len(selected)),'/',len(selected),flush=True)
+ records=[]
+ for head in sorted((r.data/'ARGODataset_Folder').rglob('*.hea')):
+  if r.paused():return 'PAUSED'
+  name=head.parent.name+'-'+head.stem
+  def one():
+   basepath=str(head.with_suffix(''));rec=wfdb.rdrecord(basepath)
+   if rec.p_signal.shape!=(2500,15) or rec.fs!=1000 or not np.isfinite(rec.p_signal).all():raise ValueError('Unexpected ARGO signal')
+   anns={}
+   for ext in ['annotation_ann1','annotation_ann2','annotation_ann3','annotation_consensus']:
+    a=wfdb.rdann(basepath,ext);labels=set(a.aux_note)
+    if a.symbol!=['(',')'] or len(labels)!=1 or not labels.issubset({'A','P','U'}):raise ValueError('Unexpected ARGO annotation encoding')
+    label=next(iter(labels));on,off=map(int,a.sample)
+    if label=='A' and not 0<=on<off<2500:raise ValueError('Invalid AVP boundaries')
+    if label!='A' and (on,off)!=(9999,9999):raise ValueError('Unexpected non-AVP sentinel')
+    anns[ext]={'samples':a.sample.tolist(),'symbols':a.symbol,'aux_note':a.aux_note,'class':label,'bounds_applicable':label=='A'}
+   result={'patient':head.parent.name,'record':head.stem,'shape':list(rec.p_signal.shape),'fs':rec.fs,'units':rec.units,'annotations':anns}
+   atomic_json(r.out/(name+'.json'),result);return {'patient':head.parent.name,'record':head.stem}
+  records.append(r.task(name,one))
+ if len(records)!=1962:raise ValueError('ARGO record count differs from official 1962')
+ ready(r,'paired-data-fit',['Coordinate units have not been explicitly verified; expert AVP annotations are not independent LAT truth. Paired volumetric scar/fibers, mechanics/hemodynamics, interventions and longitudinal outcomes are missing for a full HeartTwin/CRT qualification.'],{'records_verified':len(records),'patients':dict(collections.Counter(x['patient'] for x in records))})
+ return 'READINESS_ONLY'
+
+def numerical(r):
+ for repo,item in r.protocol['jobs'].items():
+  root=r.repos[repo]
+  for script,args in item:
+   if r.paused():return 'PAUSED'
+   name=repo+'-'+Path(script).stem
+   r.task(name,lambda:r.command(name,[sys.executable,root/script,*[str(r.out/(repo+'-'+Path(script).stem+'.json')) if x=='OUTPUT' else x for x in args]],cwd=root))
+ if 'Virelion-CardiMech' in r.repos:
+  m=module(r.repos['Virelion-CardiMech']/'scripts/validate_spatial.py','mech_adapter');atomic_json(r.out/'CardiMech-spatial.json',m.verify())
+ return 'NUMERICAL_ONLY'
+
+if __name__=='__main__':
+ protocol=json.loads(Path(sys.argv[1]).read_text());r=Run(protocol['run_root'],protocol,protocol['repo_paths'])
+ try:
+  handler=protocol['handler']
+  if handler=='gino':
+   from training import train
+   status=train(r)
+  else:status=globals()[handler](r)
+  r.finish(status);print(status,flush=True)
+ except BaseException as e:
+  r.finish('FAILED',traceback.format_exc());traceback.print_exc();sys.exit(1)
