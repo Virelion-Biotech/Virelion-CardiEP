@@ -1,0 +1,12 @@
+{
+  "error": null,
+  "input_receipts": {},
+  "protocol_sha256": "107a6b280477730186425ad513fe95d8175c5d7b7a3664a43b64825dca0c8094",
+  "scientific_validation": "NOT_ESTABLISHED_BY_EXECUTION",
+  "scope": "Planar-front/eikonal numerical checks, convergence and synthetic inverse recovery.",
+  "seconds_this_session": 101.62197550199994,
+  "source_pins": {
+    "Virelion-CardiEP": "2bcdd1ec2e282c1986d91459a0c39cea5b3ade15"
+  },
+  "status": "NUMERICAL_ONLY"
+}

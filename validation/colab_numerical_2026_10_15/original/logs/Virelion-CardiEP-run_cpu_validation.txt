@@ -1,0 +1,30 @@
+COMMAND ["/content/13_CardiEP_Numerical_v1/venv/bin/python", "/content/13_CardiEP_Numerical_v1/Virelion-CardiEP/scripts/run_cpu_validation.py", "--output", "/content/drive/MyDrive/HeartTwinValidation/13_CardiEP_Numerical_v1/results/Virelion-CardiEP-run_cpu_validation.json"]
+{
+  "passed": true,
+  "output": "/content/drive/MyDrive/HeartTwinValidation/13_CardiEP_Numerical_v1/results/Virelion-CardiEP-run_cpu_validation.json",
+  "inverse": {
+    "truth": {
+      "fibre_speed": 0.075,
+      "sheet_speed": 0.04,
+      "normal_speed": 0.03,
+      "apd_ms": 290.0
+    },
+    "recovered": {
+      "fibre_speed": 0.07499999992549419,
+      "sheet_speed": 0.039999999981373546,
+      "normal_speed": 0.030000000009313237,
+      "apd_ms": 289.99999995343387
+    },
+    "relative_errors": {
+      "fibre_speed": 9.9341072405205e-10,
+      "sheet_speed": 4.656613636355722e-10,
+      "normal_speed": 3.1044125603507666e-10,
+      "apd_ms": 1.605728576923239e-10
+    },
+    "objective": 5.4204994928942263e-08,
+    "converged": true,
+    "artifact_hashes_valid": true,
+    "passed": true,
+    "scope": "noiseless self-model parameter recovery, not independent biological validation"
+  }
+}

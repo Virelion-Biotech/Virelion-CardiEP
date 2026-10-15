@@ -1,0 +1,105 @@
+{
+  "clinical_validation": false,
+  "empirical_validation": false,
+  "isotropic_refinement": {
+    "benchmark": "isotropic-unit-cube-off-axis",
+    "isotropic_speed_cm_per_ms": 1.0,
+    "levels": [
+      {
+        "absolute_error_ms": 0.05194671867175327,
+        "activation_ms": 1.1975906424107132,
+        "exact_ms": 1.14564392373896,
+        "h_cm": 0.25,
+        "n": 4,
+        "n_nodes": 125,
+        "n_tetrahedra": 384
+      },
+      {
+        "absolute_error_ms": 0.035379012898169915,
+        "activation_ms": 1.1810229366371299,
+        "exact_ms": 1.14564392373896,
+        "h_cm": 0.125,
+        "n": 8,
+        "n_nodes": 729,
+        "n_tetrahedra": 3072
+      },
+      {
+        "absolute_error_ms": 0.02761651824171496,
+        "activation_ms": 1.173260441980675,
+        "exact_ms": 1.14564392373896,
+        "h_cm": 0.08333333333333333,
+        "n": 12,
+        "n_nodes": 2197,
+        "n_tetrahedra": 10368
+      }
+    ],
+    "metrics": {
+      "fine_absolute_error_ms": 0.02761651824171496,
+      "fine_over_coarse_error_ratio": 0.5316316207809256,
+      "monotone_error_reduction": true
+    },
+    "passed": true,
+    "scientific_boundary": "This manufactured isotropic refinement study verifies that the native tetrahedral Eikonal discretization reduces off-axis numerical error. It does not establish equivalence to monodomain/bidomain electrophysiology.",
+    "target_cm": [
+      1.0,
+      0.5,
+      0.25
+    ],
+    "validation_status": "numerical_refinement_check"
+  },
+  "numpy": "2.3.5",
+  "orthotropic_planar_front": {
+    "max_error_ms": 0.0,
+    "n_nodes": 64,
+    "n_tetrahedra": 162,
+    "passed": true
+  },
+  "passed": true,
+  "pde_solver_rerun": false,
+  "python": "3.12.14",
+  "software_reference": {
+    "checks": {
+      "deterministic_pseudo_ecg": true,
+      "isotropic_edge_travel_time": true,
+      "orthotropic_edge_travel_time": true,
+      "pre_activation_baseline": true,
+      "qrs_reference_present": true,
+      "repolarization_ordering": true,
+      "standard_12_lead_shape": true
+    },
+    "metrics": {
+      "isotropic_max_abs_error_ms": 0.0,
+      "orthotropic_max_abs_error_ms": 0.0,
+      "pseudo_ecg_repeat_max_abs_error": 0.0
+    },
+    "passed": true,
+    "scientific_boundary": "These checks validate implementation invariants only; they do not establish physiological, clinical, or numerical equivalence to monodomain/bidomain solvers.",
+    "validation_status": "software_reference_checks"
+  },
+  "synthetic_inverse": {
+    "artifact_hashes_valid": true,
+    "converged": true,
+    "objective": 5.4204994928942263e-08,
+    "passed": true,
+    "recovered": {
+      "apd_ms": 289.99999995343387,
+      "fibre_speed": 0.07499999992549419,
+      "normal_speed": 0.030000000009313237,
+      "sheet_speed": 0.039999999981373546
+    },
+    "relative_errors": {
+      "apd_ms": 1.605728576923239e-10,
+      "fibre_speed": 9.9341072405205e-10,
+      "normal_speed": 3.1044125603507666e-10,
+      "sheet_speed": 4.656613636355722e-10
+    },
+    "scope": "noiseless self-model parameter recovery, not independent biological validation",
+    "truth": {
+      "apd_ms": 290.0,
+      "fibre_speed": 0.075,
+      "normal_speed": 0.03,
+      "sheet_speed": 0.04
+    }
+  },
+  "version": "0.3.0"
+}
