@@ -1,0 +1,26 @@
+name: carputils lead-field probe
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/carputils-leadfield-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch current carputils leadfield source
+        shell: python
+        run: |
+          import urllib.request
+          url='https://git.opencarp.org/openCARP/carputils/-/raw/master/carputils/leadfield.py'
+          req=urllib.request.Request(url,headers={'User-Agent':'Virelion-CardiEP-leadfield-probe/1.0'})
+          with urllib.request.urlopen(req,timeout=60) as response:
+              text=response.read().decode('utf-8')
+          print('SOURCE_URL',url)
+          print('SOURCE_BEGIN')
+          print(text)
+          print('SOURCE_END')
