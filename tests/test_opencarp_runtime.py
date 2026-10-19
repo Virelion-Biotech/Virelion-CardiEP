@@ -153,14 +153,16 @@ def test_plan_rejects_remote_artifact_for_package_runtime(tmp_path: Path) -> Non
         )
 
 
-def test_probe_requires_open_carp_and_driver(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_requires_open_carp_and_default_dispatcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("CARDIEP_OPENCARP_EXECUTABLE", raising=False)
     monkeypatch.delenv("CARDIEP_OPENCARP_DRIVER", raising=False)
     monkeypatch.setattr("cardiep.opencarp_runtime.shutil.which", lambda _: None)
     result = probe_opencarp_runtime()
     assert result.ready is False
     assert any("openCARP executable" in reason for reason in result.reasons)
-    assert any("OPENCARP_DRIVER" in reason for reason in result.reasons)
+    assert any("cardiep-opencarp-dispatch" in reason for reason in result.reasons)
 
 
 def test_probe_accepts_explicit_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
