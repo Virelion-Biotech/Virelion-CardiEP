@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import pytest
 
 from cardiep import (
