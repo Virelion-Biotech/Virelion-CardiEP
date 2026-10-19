@@ -6,6 +6,7 @@ from typing import Any
 
 from .backends import EPBackend
 from .native_backend import NativeEikonalBackend
+from .opencarp_backend import OpenCARPExternalBackend
 from .surface_backend import SurfaceEikonalBackend
 
 
@@ -13,6 +14,7 @@ def discover_backends() -> dict[str, EPBackend]:
     backends: dict[str, EPBackend] = {
         NativeEikonalBackend.name: NativeEikonalBackend(),
         SurfaceEikonalBackend.name: SurfaceEikonalBackend(),
+        OpenCARPExternalBackend.name: OpenCARPExternalBackend(),
     }
     eps = entry_points()
     selected = (
