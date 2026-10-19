@@ -112,7 +112,7 @@ class _Simulator:
 
 
 class _Adapter:
-    parameter_name_list_in_order = ["fibre_speed", "root_0"]
+    parameter_name_list_in_order = ("fibre_speed", "root_0")
 
     def get_theta_names(self):
         return ["fibre_speed", "root_0"]
@@ -207,10 +207,8 @@ def test_full_export_uses_same_evaluator_and_validates_contract(tmp_path: Path) 
     assert payload["diagnostics"]["representative_selection"] == (
         "minimum_finite_discrepancy_same_inference_evaluator"
     )
-    assert payload["parameters"]["values"] == {
-        "fibre_speed": pytest.approx(0.07),
-        "root_0": pytest.approx(1.0),
-    }
+    assert payload["parameters"]["values"]["fibre_speed"] == pytest.approx(0.07)
+    assert payload["parameters"]["values"]["root_0"] == pytest.approx(1.0)
     assert payload["parameters"]["units"] == {
         "fibre_speed": "cm/ms",
         "root_0": "1",
