@@ -21,11 +21,10 @@ jobs:
         run: |
           sudo apt-get -qq update
           sudo apt-get -qq install -y --no-install-recommends tetgen
-          tetgen -h | head -40 || true
       - name: Build sealed public-data preflight
         run: python validation/physionet_case3/preflight.py
       - name: Build constrained patient ventricular volume mesh
-        run: python validation/physionet_case3/mesh_patient.py
+        run: python validation/physionet_case3/mesh_patient_v2.py
       - name: Install CardiEP
         run: python -m pip install -e .
       - name: Validate mesh through native CardiEP geometry loader
@@ -41,7 +40,7 @@ jobs:
           geometry = _payload_to_geometry(raw)
           assert geometry.n_nodes == len(raw['node_xyz'])
           assert len(geometry.tetrahedra) == len(raw['tetrahedra'])
-          assert geometry.endocardial_nodes is not None and len(geometry.endocardial_nodes) >= 20
+          assert geometry.endocardial_nodes is not None and len(geometry.endocardial_nodes) >= 50
           assert len(geometry.electrodes_cm) == 120
           print(json.dumps({
               'nodes': geometry.n_nodes,
