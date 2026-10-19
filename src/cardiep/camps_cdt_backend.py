@@ -81,7 +81,7 @@ def _workspace_manifest(request: EPSimulationRequest | EPCalibrationRequest) -> 
         raise ValueError("Camps workspace subject_id does not match request subject_id")
     bundle_fingerprint = request.anatomy_ref.metadata.get("bundle_fingerprint")
     if not isinstance(bundle_fingerprint, str):
-        raise ValueError("Camps CDT anatomy_ref requires metadata.bundle_fingerprint")
+        raise TypeError("Camps CDT anatomy_ref requires metadata.bundle_fingerprint")
     if manifest.source_bundle_fingerprint.lower() != bundle_fingerprint.lower():
         raise ValueError("Camps workspace source bundle does not match anatomy_ref")
     return manifest
@@ -375,7 +375,7 @@ class CampsCardiacDigitalTwinExternalBackend(SubprocessEPBackend):
             )
         preprocessing = provenance.get("ecg_preprocessing")
         if not isinstance(preprocessing, dict):
-            raise ValueError("Camps CDT calibration provenance requires ecg_preprocessing")
+            raise TypeError("Camps CDT calibration provenance requires ecg_preprocessing")
         observed_rates = preprocessing.get("source_sample_rates_hz")
         if not isinstance(observed_rates, list) or [float(x) for x in observed_rates] != [
             float(x) for x in source_sample_rates
