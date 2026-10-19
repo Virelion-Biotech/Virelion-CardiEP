@@ -1,0 +1,39 @@
+name: PhysioNet Case 3 preflight
+
+on:
+  pull_request:
+    paths:
+      - 'validation/physionet_case3/**'
+      - '.github/workflows/physionet-case3-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Detect patient preflight script
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f validation/physionet_case3/preflight.py ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Case 3 patient script is not present on this branch; workflow bootstrap only."
+          fi
+      - name: Run public-data preflight
+        if: steps.detect.outputs.available == 'true'
+        run: python validation/physionet_case3/preflight.py
+      - name: Upload preflight package
+        if: steps.detect.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: physionet-case3-preflight
+          path: case3_preflight
+          if-no-files-found: error
