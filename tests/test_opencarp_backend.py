@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from cardiep.models import ArtifactRef, EPParameterSet, EPSimulationRequest, EPSimulationResult
+from cardiep.models import (
+    ArtifactRef,
+    EPParameterSet,
+    EPSimulationRequest,
+    EPSimulationResult,
+)
 from cardiep.opencarp_backend import OpenCARPExternalBackend
 from cardiep.provenance import sha256_json
 
@@ -95,7 +100,10 @@ def test_request_requires_lead_field_forward_model() -> None:
 
 
 def test_patient_specific_torso_requires_pinned_artifact() -> None:
-    request = _request(torso_mode="patient_specific", torso_ref={"artifact_id": "torso", "uri": "file:///torso.vtu"})
+    request = _request(
+        torso_mode="patient_specific",
+        torso_ref={"artifact_id": "torso", "uri": "file:///torso.vtu"},
+    )
     with pytest.raises(ValueError, match="SHA-256"):
         OpenCARPExternalBackend.validate_request(request)
 
