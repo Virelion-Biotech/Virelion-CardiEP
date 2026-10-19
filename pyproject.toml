@@ -13,9 +13,11 @@ dependencies = [
 io = ["meshio>=5.3,<6"]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
 reference = ["scipy>=1.11,<2"]
+wrappers = ["scipy>=1.11,<2"]
 
 [project.scripts]
 cardiep = "cardiep.cli:main"
+cardiep-camps-cdt-wrapper = "cardiep.camps_runtime:main"
 
 [project.urls]
 Repository = "https://github.com/Virelion-Biotech/Virelion-CardiEP"
