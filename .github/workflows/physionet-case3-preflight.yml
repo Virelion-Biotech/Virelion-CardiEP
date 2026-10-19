@@ -1,0 +1,27 @@
+name: PhysioNet Case 3 preflight
+
+on:
+  pull_request:
+    paths:
+      - 'validation/physionet_case3/**'
+      - '.github/workflows/physionet-case3-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run public-data preflight
+        run: python validation/physionet_case3/preflight.py
+      - name: Upload preflight package
+        uses: actions/upload-artifact@v4
+        with:
+          name: physionet-case3-preflight
+          path: case3_preflight
+          if-no-files-found: error
