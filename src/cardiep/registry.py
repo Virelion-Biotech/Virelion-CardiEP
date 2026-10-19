@@ -5,6 +5,7 @@ from importlib.metadata import entry_points
 from typing import Any
 
 from .backends import EPBackend
+from .camps_cdt_backend import CampsCardiacDigitalTwinExternalBackend
 from .native_backend import NativeEikonalBackend
 from .opencarp_backend import OpenCARPExternalBackend
 from .surface_backend import SurfaceEikonalBackend
@@ -14,6 +15,7 @@ def discover_backends() -> dict[str, EPBackend]:
     backends: dict[str, EPBackend] = {
         NativeEikonalBackend.name: NativeEikonalBackend(),
         SurfaceEikonalBackend.name: SurfaceEikonalBackend(),
+        CampsCardiacDigitalTwinExternalBackend.name: CampsCardiacDigitalTwinExternalBackend(),
         OpenCARPExternalBackend.name: OpenCARPExternalBackend(),
     }
     eps = entry_points()
