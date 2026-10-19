@@ -1,0 +1,65 @@
+name: PhysioNet Case 3 fast calibration
+
+on:
+  pull_request:
+    paths:
+      - 'validation/physionet_case3/**'
+      - 'src/cardiep/**'
+      - '.github/workflows/physionet-case3-calibration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install constrained tetrahedral mesher
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y --no-install-recommends tetgen
+      - name: Install CardiEP
+        run: python -m pip install -e .
+      - name: Build public-data preflight
+        run: python validation/physionet_case3/preflight.py
+      - name: Build patient ventricular volume mesh
+        run: python validation/physionet_case3/mesh_patient.py
+      - name: Run sealed fast calibration then open holdout
+        run: python validation/physionet_case3/calibrate_patient.py
+      - name: Verify sealed model predates holdout result
+        shell: python
+        run: |
+          import hashlib, json
+          from pathlib import Path
+          sealed = Path('case3_fast_calibration/sealed_model.json')
+          activation = Path('case3_fast_calibration/calibration_activation.json')
+          validation = Path('case3_fast_calibration/fast_model_holdout_evaluation.json')
+          assert sealed.is_file() and activation.is_file() and validation.is_file()
+          model = json.loads(sealed.read_text())
+          evaluation = json.loads(validation.read_text())
+          digest = hashlib.sha256(sealed.read_bytes()).hexdigest()
+          assert evaluation['sealed_model_sha256'] == digest
+          assert model['holdout_opened_before_seal'] is False
+          assert evaluation['holdout_count'] == 108
+          assert model['activation_artifact']['sha256'] == hashlib.sha256(activation.read_bytes()).hexdigest()
+          print(json.dumps({
+              'sealed_model_sha256': digest,
+              'activation_sha256': model['activation_artifact']['sha256'],
+              'selected': model['selected'],
+              'calibration_summary': model['calibration_summary'],
+              'holdout_summary': evaluation['summary'],
+          }, indent=2, sort_keys=True))
+      - name: Upload calibration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: physionet-case3-fast-calibration
+          path: |
+            case3_preflight
+            case3_patient_mesh
+            case3_fast_calibration
+          if-no-files-found: error
