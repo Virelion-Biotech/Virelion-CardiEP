@@ -13,7 +13,7 @@ from cardiep.opencarp_runtime import (
     prepare_opencarp_runtime_plan,
     probe_opencarp_runtime,
 )
-from cardiep.provenance import sha256_json
+from cardiep.provenance import sha256_json, uri_to_path
 
 STANDARD_12 = [
     "I",
@@ -124,7 +124,7 @@ def test_plan_stages_all_patient_artifacts_by_hash(tmp_path: Path) -> None:
 
 def test_plan_rejects_tampered_artifact(tmp_path: Path) -> None:
     request = _request(tmp_path)
-    anatomy_path = Path(request.anatomy_ref.uri.removeprefix("file://"))
+    anatomy_path = uri_to_path(request.anatomy_ref.uri)
     anatomy_path.write_bytes(b"tampered")
     opencarp = tmp_path / "openCARP"
     opencarp.write_text("fixture", encoding="utf-8")
