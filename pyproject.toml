@@ -18,6 +18,7 @@ wrappers = ["scipy>=1.11,<2"]
 [project.scripts]
 cardiep = "cardiep.cli:main"
 cardiep-camps-cdt-wrapper = "cardiep.camps_runtime:main"
+cardiep-camps-qualified-driver = "cardiep.camps_qualified_driver:main"
 cardiep-opencarp-wrapper = "cardiep.opencarp_runtime:main"
 
 [project.urls]
