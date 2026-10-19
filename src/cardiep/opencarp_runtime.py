@@ -1,18 +1,10 @@
 """Deterministic runtime staging for the external openCARP confirmation backend.
 
 The package-owned ``cardiep-opencarp-wrapper`` does not guess an openCARP
-experiment from a generic patient request.  It validates the existing strict
-CardiEP request contract, stages every local artifact into a hash-addressed run
-directory, preserves the original request hash, and delegates the
-experiment-specific conversion to an explicitly configured driver.
-
-The driver is responsible for translating the staged anatomy, calibrated
-activation target, scalar parameter mapping, torso/electrode assumptions, and
-lead-field request into a reproducible openCARP/carputils experiment.  The
-existing :class:`cardiep.opencarp_backend.OpenCARPExternalBackend` validates the
-result after this wrapper returns, including request hash, openCARP/wrapper
-versions, standard 12-lead output, activation output, and calibration-reference
-lineage.
+experiment from a generic patient request. It validates the strict CardiEP
+request contract, stages every local artifact into a hash-addressed run
+directory, preserves the original request hash, and delegates scientific
+execution to the versioned experiment dispatcher by default.
 """
 from __future__ import annotations
 
@@ -95,7 +87,15 @@ def _command_tokens(env_name: str) -> list[str] | None:
 
 def _driver_tokens() -> list[str] | None:
     tokens = _command_tokens("CARDIEP_OPENCARP_DRIVER")
-    if not tokens or not {"{plan}", "{output}"}.issubset(tokens):
+    if tokens is None:
+        tokens = [
+            "cardiep-opencarp-dispatch",
+            "--plan",
+            "{plan}",
+            "--output",
+            "{output}",
+        ]
+    if not {"{plan}", "{output}"}.issubset(tokens):
         return None
     return tokens
 
@@ -154,7 +154,9 @@ def _runtime_root(request_sha: str, subject_id: str) -> Path:
     return (base / "opencarp" / safe_subject / request_sha[:16]).resolve()
 
 
-def _local_artifact_path(ref: ArtifactRef | dict[str, Any], *, role: str) -> tuple[Path, str]:
+def _local_artifact_path(
+    ref: ArtifactRef | dict[str, Any], *, role: str
+) -> tuple[Path, str]:
     if isinstance(ref, ArtifactRef):
         uri = ref.uri
         digest = ref.sha256
@@ -220,7 +222,9 @@ def _stage_artifact(
     )
 
 
-def _request_artifacts(request: EPSimulationRequest) -> list[tuple[str, ArtifactRef | dict[str, Any]]]:
+def _request_artifacts(
+    request: EPSimulationRequest,
+) -> list[tuple[str, ArtifactRef | dict[str, Any]]]:
     artifacts: list[tuple[str, ArtifactRef | dict[str, Any]]] = [
         ("anatomy", request.anatomy_ref)
     ]
@@ -229,6 +233,15 @@ def _request_artifacts(request: EPSimulationRequest) -> list[tuple[str, Artifact
         artifacts.append(("torso", settings["torso_ref"]))
     if str(settings.get("electrode_mode", "")).lower() == "recorded":
         artifacts.append(("electrodes", settings["electrode_ref"]))
+
+    workspace = settings.get("opencarp_workspace_ref")
+    if workspace is not None:
+        if not isinstance(workspace, dict):
+            raise OpenCARPRuntimeError(
+                "settings.opencarp_workspace_ref must be an artifact object"
+            )
+        artifacts.append(("opencarp_workspace", workspace))
+
     calibration = settings.get("hearttwin_calibration_reference")
     if isinstance(calibration, dict):
         activation = calibration.get("activation_ref")
