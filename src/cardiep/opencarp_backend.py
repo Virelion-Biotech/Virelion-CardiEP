@@ -8,11 +8,18 @@ The wrapper boundary is intentionally stricter than ``SubprocessEPBackend``:
 scientific-grade ECG confirmation must use an explicit lead-field forward model,
 return a standard 12-lead ECG artifact, preserve the exact request hash, and
 report openCARP/wrapper versions. A pseudo-ECG is rejected.
+
+When confirmation follows a heterogeneous fast calibration model, the caller may
+also provide a hash-pinned activation-map reference. The wrapper must explicitly
+report how that calibration-derived activation target was translated into the
+openCARP stimulation setup; it may not silently reinterpret discrete root-site
+structure as scalar conductivity parameters.
 """
 from __future__ import annotations
 
 import os
 import shlex
+import string
 from typing import Any
 
 from .backends import BackendUnavailable
@@ -26,6 +33,7 @@ from .models import (
 from .provenance import sha256_json
 
 OPENCARP_BACKEND_NAME = "opencarp-external-v1"
+_CALIBRATION_REFERENCE_KEY = "hearttwin_calibration_reference"
 _STANDARD_12_LEADS = {
     "I",
     "II",
@@ -40,6 +48,13 @@ _STANDARD_12_LEADS = {
     "V5",
     "V6",
 }
+
+
+def _require_sha256(value: Any, *, field: str) -> str:
+    text = str(value or "").lower()
+    if len(text) != 64 or any(character not in string.hexdigits for character in text):
+        raise ValueError(f"{field} must be a 64-character SHA-256 hex string")
+    return text
 
 
 class OpenCARPExternalBackend(SubprocessEPBackend):
@@ -96,9 +111,56 @@ class OpenCARPExternalBackend(SubprocessEPBackend):
             raise TypeError(f"{setting} must be an artifact reference object")
         if not value.get("artifact_id") or not value.get("uri"):
             raise ValueError(f"{setting} requires artifact_id and uri")
-        digest = value.get("sha256")
-        if digest is None or not isinstance(digest, str) or len(digest) != 64:
-            raise ValueError(f"{setting} requires a SHA-256 pinned artifact")
+        _require_sha256(value.get("sha256"), field=f"{setting}.sha256")
+
+    @classmethod
+    def _validate_calibration_reference(
+        cls,
+        request: EPSimulationRequest,
+    ) -> dict[str, Any] | None:
+        value = request.settings.get(_CALIBRATION_REFERENCE_KEY)
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise TypeError(f"settings.{_CALIBRATION_REFERENCE_KEY} must be an object")
+        if value.get("role") != "activation_target_from_fast_calibration":
+            raise ValueError(
+                f"settings.{_CALIBRATION_REFERENCE_KEY}.role must be "
+                "'activation_target_from_fast_calibration'"
+            )
+        source_backend = str(value.get("source_backend") or "").strip()
+        if not source_backend or source_backend == OPENCARP_BACKEND_NAME:
+            raise ValueError(
+                "calibration activation reference requires a different explicit source_backend"
+            )
+        activation_ref = value.get("activation_ref")
+        cls._validate_artifact_ref(
+            activation_ref,
+            setting=f"settings.{_CALIBRATION_REFERENCE_KEY}.activation_ref",
+        )
+        if activation_ref.get("kind") != "activation_map":
+            raise ValueError("calibration activation reference must have kind='activation_map'")
+        expected_bundle = request.anatomy_ref.metadata.get("bundle_fingerprint")
+        reference_bundle = value.get("anatomy_bundle_fingerprint")
+        if not isinstance(expected_bundle, str) or not expected_bundle:
+            raise ValueError("openCARP anatomy_ref requires metadata.bundle_fingerprint")
+        if str(reference_bundle) != expected_bundle:
+            raise ValueError(
+                "calibration activation reference anatomy bundle does not match openCARP anatomy"
+            )
+        activation_frame = activation_ref.get("coordinate_frame")
+        anatomy_frame = request.anatomy_ref.coordinate_frame
+        if activation_frame and anatomy_frame and str(activation_frame) != str(anatomy_frame):
+            raise ValueError(
+                "calibration activation reference coordinate frame does not match openCARP anatomy"
+            )
+        _require_sha256(
+            value.get("parameter_mapping_fingerprint"),
+            field=(
+                f"settings.{_CALIBRATION_REFERENCE_KEY}.parameter_mapping_fingerprint"
+            ),
+        )
+        return value
 
     @classmethod
     def validate_request(cls, request: EPSimulationRequest) -> None:
@@ -132,6 +194,8 @@ class OpenCARPExternalBackend(SubprocessEPBackend):
             expected = sorted(_STANDARD_12_LEADS)
         if not isinstance(expected, list) or set(map(str, expected)) != _STANDARD_12_LEADS:
             raise ValueError("openCARP patient ECG confirmation currently requires standard 12 leads")
+
+        cls._validate_calibration_reference(request)
 
     @staticmethod
     def _output_of_kind(result: EPSimulationResult, kinds: set[str]):
@@ -174,6 +238,38 @@ class OpenCARPExternalBackend(SubprocessEPBackend):
         expected_sha = sha256_json(request.model_dump(mode="json"))
         if str(provenance["request_sha256"]).lower() != expected_sha:
             raise ValueError("openCARP wrapper result request_sha256 does not match request")
+
+        calibration_reference = cls._validate_calibration_reference(request)
+        if calibration_reference is not None:
+            expected_reference_sha = sha256_json(calibration_reference)
+            observed_reference_sha = _require_sha256(
+                provenance.get("calibration_reference_sha256"),
+                field="provenance.calibration_reference_sha256",
+            )
+            if observed_reference_sha != expected_reference_sha:
+                raise ValueError(
+                    "openCARP calibration_reference_sha256 does not match request"
+                )
+            method = str(provenance.get("stimulation_translation_method") or "").strip()
+            if not method:
+                raise ValueError(
+                    "openCARP result provenance requires stimulation_translation_method "
+                    "when a fast-calibration activation target is supplied"
+                )
+            activation_ref = calibration_reference["activation_ref"]
+            if str(provenance.get("calibration_activation_artifact_id")) != str(
+                activation_ref["artifact_id"]
+            ):
+                raise ValueError(
+                    "openCARP result does not identify the requested calibration activation artifact"
+                )
+            if _require_sha256(
+                provenance.get("calibration_activation_sha256"),
+                field="provenance.calibration_activation_sha256",
+            ) != str(activation_ref["sha256"]).lower():
+                raise ValueError(
+                    "openCARP result calibration activation hash does not match request"
+                )
 
     def simulate(self, request: EPSimulationRequest) -> EPSimulationResult:
         self.validate_request(request)
