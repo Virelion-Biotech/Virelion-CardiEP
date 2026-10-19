@@ -12,8 +12,8 @@ import pytest
 from cardiep.camps_cdt_backend import CAMPS_CDT_BACKEND_NAME
 from cardiep.camps_probed_backend import ProbedCampsCardiacDigitalTwinExternalBackend
 from cardiep.camps_runtime import (
-    CampsRuntimeError,
     UPSTREAM_ECG_LEADS,
+    CampsRuntimeError,
     _materialize_worktree,
     _stage_calibration_ecg,
     probe_camps_runtime,
@@ -102,7 +102,6 @@ def test_stage_ecg_uses_only_upstream_independent_leads(tmp_path: Path) -> None:
     assert staged.target_sample_rate_hz == 1000.0
     assert staged.staged_sha256 == _sha(Path(staged.staged_path))
 
-    # Lead order is the audited upstream order, not the source 12-lead order.
     source_indices = [STANDARD_12.index(lead) for lead in UPSTREAM_ECG_LEADS]
     assert np.allclose(matrix[:, 0], np.asarray(source_indices, dtype=float) * 100.0)
 
