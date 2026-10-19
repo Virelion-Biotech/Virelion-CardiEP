@@ -239,14 +239,13 @@ class OpenCARPExperimentSpec(BaseModel):
                     raise ValueError(
                         "reaction_eikonal_minus requires conduction velocities"
                     )
-            elif self.activation_model == "reaction_eikonal_plus":
-                if (
-                    region.conduction_velocity_m_per_s is None
-                    or region.intracellular_conductivity_s_per_m is None
-                ):
-                    raise ValueError(
-                        "reaction_eikonal_plus requires both velocities and intracellular conductivities"
-                    )
+            elif self.activation_model == "reaction_eikonal_plus" and (
+                region.conduction_velocity_m_per_s is None
+                or region.intracellular_conductivity_s_per_m is None
+            ):
+                raise ValueError(
+                    "reaction_eikonal_plus requires both velocities and intracellular conductivities"
+                )
 
             if (
                 self.field_model in {"bidomain", "pseudo_bidomain"}
@@ -304,10 +303,12 @@ def validate_experiment_request(
             )
 
     calibration = settings.get("hearttwin_calibration_reference")
-    if not isinstance(calibration, dict) or not isinstance(
-        calibration.get("activation_ref"), dict
-    ):
-        raise ValueError(
+    if not isinstance(calibration, dict):
+        raise TypeError(
+            "experiment requires a hash-pinned HeartTwin calibration reference object"
+        )
+    if not isinstance(calibration.get("activation_ref"), dict):
+        raise TypeError(
             "experiment requires a hash-pinned HeartTwin calibration activation reference"
         )
     activation_ref = calibration["activation_ref"]
