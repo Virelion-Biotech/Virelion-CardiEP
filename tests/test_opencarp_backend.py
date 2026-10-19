@@ -1,6 +1,11 @@
 import pytest
 
-from cardiep import ArtifactRef, EPParameterSet, EPSimulationRequest, EPSimulationResult
+from cardiep import (
+    ArtifactRef,
+    EPParameterSet,
+    EPSimulationRequest,
+    EPSimulationResult,
+)
 from cardiep.opencarp_backend import OpenCARPExternalBackend
 from cardiep.provenance import sha256_json
 
