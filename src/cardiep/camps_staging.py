@@ -88,16 +88,17 @@ def materialize_camps_geometry_workspace(
             shutil.copyfile(source, destination)
         staged_sha256[field_name] = file_sha256(destination)
 
-    # Upstream concatenates strings rather than using pathlib; keep trailing
-    # separators in the generated config to preserve the audited behavior.
-    data_path = str(data_root) + "/"
-    results_path = str(results_root) + "/"
+    # The audited upstream code concatenates path strings. Use forward slashes
+    # and trailing separators on every platform; Python accepts this form on
+    # Windows and it avoids mixed ``C:\\.../geometric_data`` paths.
+    data_path = data_root.as_posix().rstrip("/") + "/"
+    results_path = results_root.as_posix().rstrip("/") + "/"
     path_mapping = {"data_path": data_path, "results_path": results_path}
     path_mapping_json = json.dumps(path_mapping, sort_keys=True, separators=(",", ":"))
 
     return CampsStagingResult(
         workspace_manifest_fingerprint=selected.fingerprint,
-        staging_root=str(root),
+        staging_root=root.as_posix(),
         data_path=data_path,
         results_path=results_path,
         path_mapping_json=path_mapping_json,
