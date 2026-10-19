@@ -1,13 +1,13 @@
 """Strict external openCARP confirmation backend.
 
-CardiEP does not vendor openCARP.  This adapter executes a user-installed wrapper
+CardiEP does not vendor openCARP. This adapter executes a user-installed wrapper
 that translates the stable CardiEP JSON contract into a reproducible openCARP /
 carputils experiment and translates the resulting artifacts back into CardiEP.
 
 The wrapper boundary is intentionally stricter than ``SubprocessEPBackend``:
 scientific-grade ECG confirmation must use an explicit lead-field forward model,
 return a standard 12-lead ECG artifact, preserve the exact request hash, and
-report openCARP/wrapper versions.  A pseudo-ECG is rejected.
+report openCARP/wrapper versions. A pseudo-ECG is rejected.
 """
 from __future__ import annotations
 
@@ -17,7 +17,12 @@ from typing import Any
 
 from .backends import BackendUnavailable
 from .external import SubprocessEPBackend
-from .models import EPCalibrationRequest, EPCalibrationResult, EPSimulationRequest, EPSimulationResult
+from .models import (
+    EPCalibrationRequest,
+    EPCalibrationResult,
+    EPSimulationRequest,
+    EPSimulationResult,
+)
 from .provenance import sha256_json
 
 OPENCARP_BACKEND_NAME = "opencarp-external-v1"
@@ -88,7 +93,7 @@ class OpenCARPExternalBackend(SubprocessEPBackend):
     @staticmethod
     def _validate_artifact_ref(value: Any, *, setting: str) -> None:
         if not isinstance(value, dict):
-            raise ValueError(f"{setting} must be an artifact reference object")
+            raise TypeError(f"{setting} must be an artifact reference object")
         if not value.get("artifact_id") or not value.get("uri"):
             raise ValueError(f"{setting} requires artifact_id and uri")
         digest = value.get("sha256")
