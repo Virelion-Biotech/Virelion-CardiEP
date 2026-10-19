@@ -1,6 +1,6 @@
-import cardiep.models as ep_models
 import pytest
 
+import cardiep.models as ep_models
 from cardiep.opencarp_backend import OpenCARPExternalBackend
 from cardiep.provenance import sha256_json
 
