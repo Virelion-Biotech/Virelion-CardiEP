@@ -1,33 +1,22 @@
-"""Qualified instrumentation driver for the pinned Camps QRS workflow.
+"""Qualified export hook for the pinned Camps QRS workflow.
 
 The upstream ``personalise_to_QRS.py`` inference script creates the exact
 ``DiscrepancyEvaluator`` used by SMC-ABC, obtains ``population_theta`` and
 ``population_parameter``, and then discards the inference object before saving
-CSV populations.  That makes post-hoc selection from the CSV files ambiguous:
-row order is not a best-particle ranking and no per-particle discrepancy is
-saved.
+CSV populations. CSV row order is therefore not a justified best-particle
+ranking.
 
-This driver instruments exactly one audited source boundary in an isolated,
-pinned git worktree: immediately after
-``population_parameter = inference_method.get_parameter_from_theta(...)``.
-At that point it recomputes the discrepancy for every posterior particle using
-the *same evaluator used by inference*, selects the minimum finite discrepancy,
-simulates that exact parameter vector, exports its ECG and activation map, and
-writes a complete CardiEP ``EPCalibrationResult``.  The temporary instrumented
-script exits immediately after export, before upstream clears the evaluator or
-enters plotting code.
-
-The instrumentation is deliberately source-pinned and fail-closed.  If the
-audited marker is absent or appears more than once, execution stops rather than
-patching a different upstream revision heuristically.
+The companion launcher instruments exactly one audited source boundary in an
+isolated, pinned worktree: immediately after
+``population_parameter = inference_method.get_parameter_from_theta(...)``. This
+module receives that live upstream namespace, recomputes discrepancy for every
+posterior particle with the same evaluator used by inference, selects the
+minimum finite discrepancy, simulates that exact parameter vector, and exports
+a complete strict CardiEP calibration result.
 """
 from __future__ import annotations
 
-import argparse
 import json
-import math
-import os
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +45,10 @@ _INSERTION_MARKER = (
     "        population_parameter = inference_method.get_parameter_from_theta(population_theta)\n"
 )
 _INDEPENDENT_LEADS = ("I", "II", "V1", "V2", "V3", "V4", "V5", "V6")
-_STANDARD_12 = ("I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6")
+_STANDARD_12 = (
+    "I", "II", "III", "aVR", "aVL", "aVF",
+    "V1", "V2", "V3", "V4", "V5", "V6",
+)
 
 
 class CampsScientificDriverError(RuntimeError):
@@ -78,11 +70,7 @@ def select_minimum_finite_discrepancy(discrepancy: Any) -> tuple[int, float]:
 
 
 def expand_independent_ecg_to_standard_12(ecg: Any) -> np.ndarray:
-    """Expand upstream [I, II, V1..V6] into the standard 12-lead ordering.
-
-    The augmented/derived limb leads are reconstructed algebraically from I and
-    II; no information from held-out data is used.
-    """
+    """Expand upstream [I, II, V1..V6] into the standard 12-lead ordering."""
     array = np.asarray(ecg, dtype=float)
     if array.ndim != 2 or array.shape[0] != len(_INDEPENDENT_LEADS):
         raise CampsScientificDriverError(
@@ -99,11 +87,10 @@ def expand_independent_ecg_to_standard_12(ecg: Any) -> np.ndarray:
 
 
 def _parameter_units(names: list[str]) -> dict[str, str]:
-    units: dict[str, str] = {}
-    for name in names:
-        lowered = str(name).lower()
-        units[str(name)] = "cm/ms" if "speed" in lowered else "1"
-    return units
+    return {
+        str(name): ("cm/ms" if "speed" in str(name).lower() else "1")
+        for name in names
+    }
 
 
 def _instrument_source(source: str, *, plan_path: Path, output_path: Path) -> str:
@@ -127,21 +114,28 @@ def _require_namespace(namespace: dict[str, Any], name: str) -> Any:
     return namespace[name]
 
 
-def _representative_simulation(evaluator: Any, selected_parameter: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    adapter = evaluator.adapter
-    modules = adapter.distribute_parameter_to_modules(parameter_particle=selected_parameter)
+def _representative_simulation(
+    evaluator: Any,
+    selected_parameter: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    modules = evaluator.adapter.distribute_parameter_to_modules(
+        parameter_particle=selected_parameter
+    )
     ecg = np.asarray(
         evaluator.simulator.simulate_particle(parameter_particle_modules_dict=modules),
         dtype=float,
     )
-    electrophysiology = evaluator.simulator.electrophysiology_model
-    activation, _vm = electrophysiology.simulate_electrophysiology(
+    activation, _vm = evaluator.simulator.electrophysiology_model.simulate_electrophysiology(
         parameter_particle_modules_dict=modules
     )
     activation = np.asarray(activation, dtype=float).reshape(-1)
     if activation.size == 0 or not np.isfinite(activation).all():
         raise CampsScientificDriverError("selected Camps activation map is empty or non-finite")
     return ecg, activation
+
+
+def _json_discrepancy(values: np.ndarray) -> list[float | None]:
+    return [float(value) if np.isfinite(value) else None for value in values.reshape(-1)]
 
 
 def _posterior_payload(
@@ -164,7 +158,7 @@ def _posterior_payload(
         "theta_names": theta_names,
         "parameter_population": population_parameter.tolist(),
         "theta_population": population_theta.tolist(),
-        "discrepancy": discrepancy.tolist(),
+        "discrepancy": _json_discrepancy(discrepancy),
     }
 
 
@@ -194,7 +188,9 @@ def export_from_upstream_namespace(
     population_parameter = np.asarray(
         _require_namespace(namespace, "population_parameter"), dtype=float
     )
-    population_theta = np.asarray(_require_namespace(namespace, "population_theta"), dtype=float)
+    population_theta = np.asarray(
+        _require_namespace(namespace, "population_theta"), dtype=float
+    )
     inference_success = bool(_require_namespace(namespace, "inference_success"))
     if population_parameter.ndim != 2 or population_parameter.shape[0] < 1:
         raise CampsScientificDriverError("upstream parameter population has invalid shape")
@@ -228,7 +224,11 @@ def export_from_upstream_namespace(
         name: float(selected_parameter[index]) for index, name in enumerate(parameter_names)
     }
     units = _parameter_units(parameter_names)
-    selected_parameters = EPParameterSet(values=parameter_values, units=units, source="calibrated")
+    selected_parameters = EPParameterSet(
+        values=parameter_values,
+        units=units,
+        source="calibrated",
+    )
 
     artifact_root = Path(plan["runtime_root"]).expanduser().resolve() / "scientific-result"
     posterior_ref = write_json_artifact(
@@ -297,17 +297,6 @@ def export_from_upstream_namespace(
         observations=[],
         settings=request.settings,
     )
-    simulation_provenance = {
-        "engine": UPSTREAM_REPOSITORY,
-        "upstream_commit": upstream_commit,
-        "wrapper_version": DRIVER_VERSION,
-        "paper_doi": UPSTREAM_DOI,
-        "workspace_manifest_fingerprint": workspace.fingerprint,
-        "request_sha256": sha256_json(simulation_request.model_dump(mode="json")),
-        "representative_selection": "minimum_finite_discrepancy_same_inference_evaluator",
-        "selected_index": selected_index,
-        "selected_discrepancy": selected_discrepancy,
-    }
     simulated = EPSimulationResult(
         subject_id=request.subject_id,
         backend=request.backend,
@@ -317,24 +306,18 @@ def export_from_upstream_namespace(
         warnings=[
             "Camps QRS forward ECG is normalized for inverse-model calibration and is not a physical-voltage clinical forward solution."
         ],
-        provenance=simulation_provenance,
-    )
-    calibration_provenance = {
-        "engine": UPSTREAM_REPOSITORY,
-        "upstream_commit": upstream_commit,
-        "wrapper_version": DRIVER_VERSION,
-        "paper_doi": UPSTREAM_DOI,
-        "workspace_manifest_fingerprint": workspace.fingerprint,
-        "ecg_preprocessing": {
-            "source_sample_rates_hz": [float(item) for item in source_rates],
-            "target_sample_rate_hz": UPSTREAM_QRS_SAMPLE_RATE_HZ,
-            "method": resampling_method,
+        provenance={
+            "engine": UPSTREAM_REPOSITORY,
+            "upstream_commit": upstream_commit,
+            "wrapper_version": DRIVER_VERSION,
+            "paper_doi": UPSTREAM_DOI,
+            "workspace_manifest_fingerprint": workspace.fingerprint,
+            "request_sha256": sha256_json(simulation_request.model_dump(mode="json")),
+            "representative_selection": "minimum_finite_discrepancy_same_inference_evaluator",
+            "selected_index": selected_index,
+            "selected_discrepancy": selected_discrepancy,
         },
-        "request_sha256": sha256_json(request.model_dump(mode="json")),
-        "representative_selection": "minimum_finite_discrepancy_same_inference_evaluator",
-        "selected_index": selected_index,
-        "selected_discrepancy": selected_discrepancy,
-    }
+    )
     result = EPCalibrationResult(
         subject_id=request.subject_id,
         backend=request.backend,
@@ -355,9 +338,23 @@ def export_from_upstream_namespace(
             },
             "inference_success": inference_success,
         },
-        provenance=calibration_provenance,
+        provenance={
+            "engine": UPSTREAM_REPOSITORY,
+            "upstream_commit": upstream_commit,
+            "wrapper_version": DRIVER_VERSION,
+            "paper_doi": UPSTREAM_DOI,
+            "workspace_manifest_fingerprint": workspace.fingerprint,
+            "ecg_preprocessing": {
+                "source_sample_rates_hz": [float(item) for item in source_rates],
+                "target_sample_rate_hz": UPSTREAM_QRS_SAMPLE_RATE_HZ,
+                "method": resampling_method,
+            },
+            "request_sha256": sha256_json(request.model_dump(mode="json")),
+            "representative_selection": "minimum_finite_discrepancy_same_inference_evaluator",
+            "selected_index": selected_index,
+            "selected_discrepancy": selected_discrepancy,
+        },
     )
-    # Validate the exact result before exposing it to the outer subprocess adapter.
     CampsCardiacDigitalTwinExternalBackend.validate_calibration_result(
         request,
         result,
@@ -369,59 +366,12 @@ def export_from_upstream_namespace(
     output = Path(output_path).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
-        json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True, allow_nan=False) + "\n",
+        json.dumps(
+            result.model_dump(mode="json"),
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
-
-
-def run_qualified_driver(plan_path: str | Path, output_path: str | Path) -> None:
-    plan_file = Path(plan_path).expanduser().resolve()
-    output_file = Path(output_path).expanduser().resolve()
-    plan = json.loads(plan_file.read_text(encoding="utf-8"))
-    if not isinstance(plan, dict):
-        raise CampsScientificDriverError("Camps runtime plan must be a JSON object")
-    if str(plan.get("upstream_commit", "")) != AUDITED_UPSTREAM_COMMIT:
-        raise CampsScientificDriverError(
-            "qualified driver supports only the audited upstream Camps commit"
-        )
-    source_path = Path(plan["upstream_entrypoint"]).expanduser().resolve()
-    if not source_path.is_file():
-        raise CampsScientificDriverError(f"upstream entrypoint is missing: {source_path}")
-    source = source_path.read_text(encoding="utf-8")
-    instrumented = _instrument_source(source, plan_path=plan_file, output_path=output_file)
-    instrumented_path = Path(plan["runtime_root"]).expanduser().resolve() / "instrumented_personalise_to_QRS.py"
-    instrumented_path.write_text(instrumented, encoding="utf-8")
-
-    process = subprocess.run(
-        [os.environ.get("CARDIEP_CAMPS_PYTHON", os.sys.executable), str(instrumented_path)],
-        cwd=str(source_path.parent),
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**os.environ, "MPLBACKEND": os.environ.get("MPLBACKEND", "Agg")},
-    )
-    if process.returncode:
-        raise CampsScientificDriverError(
-            process.stderr.strip()
-            or process.stdout.strip()
-            or f"instrumented Camps workflow exited with {process.returncode}"
-        )
-    if not output_file.is_file():
-        raise CampsScientificDriverError("instrumented Camps workflow produced no result JSON")
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Qualified Camps QRS posterior-selection driver")
-    parser.add_argument("plan")
-    parser.add_argument("output")
-    args = parser.parse_args(argv)
-    try:
-        run_qualified_driver(args.plan, args.output)
-    except (CampsScientificDriverError, OSError, TypeError, ValueError) as exc:
-        print(f"cardiep-camps-qualified-driver: {type(exc).__name__}: {exc}", file=os.sys.stderr)
-        return 2
-    return 0
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())
