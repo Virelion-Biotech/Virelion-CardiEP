@@ -45,8 +45,7 @@ from .camps_cdt_backend import (
     CampsCardiacDigitalTwinExternalBackend,
 )
 from .camps_staging import CampsStagingResult, materialize_camps_geometry_workspace
-from .camps_workspace import CampsWorkspaceManifest
-from .models import EPCalibrationRequest, EPSimulationRequest
+from .models import EPCalibrationRequest
 from .provenance import file_sha256, sha256_json, uri_to_path, verify_file_sha256
 
 UPSTREAM_ALIAS = "UKB_1097970"
@@ -322,7 +321,10 @@ def _stage_calibration_ecg(
 def _runtime_root(request_sha: str, subject_id: str) -> Path:
     configured = os.environ.get("CARDIEP_RUNTIME_ROOT")
     base = Path(configured).expanduser() if configured else Path.cwd() / "cardiep_runs" / "runtime"
-    safe_subject = "".join(character if character.isalnum() or character in "-_." else "_" for character in subject_id)
+    safe_subject = "".join(
+        character if character.isalnum() or character in "-_." else "_"
+        for character in subject_id
+    )
     return (base / "camps" / safe_subject / request_sha[:16]).resolve()
 
 
@@ -478,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--request and --output are required unless --probe is used")
     try:
         run_camps_wrapper(args.request, args.output)
-    except Exception as exc:
+    except (CampsRuntimeError, OSError, TypeError, ValueError) as exc:
         print(f"cardiep-camps-cdt-wrapper: {type(exc).__name__}: {exc}", file=os.sys.stderr)
         return 2
     return 0
