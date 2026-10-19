@@ -55,14 +55,55 @@ For v1, requests require:
 
 - hash-pinned patient anatomy;
 - an explicit anatomy coordinate frame;
+- a complete `CampsWorkspaceManifest` for the upstream QRS geometry fields;
 - standard 12-lead ECG observations for calibration;
-- hash-pinned ECG artifacts;
+- hash-pinned ECG artifacts with their original sampling rates;
 - `calibration_target = "activation_qrs"`;
 - `inference_method = "smc_abc"`;
 - an explicit pinned `upstream_commit`; and
 - standard 12-lead expectation metadata.
 
 Forward replay is unconditional: observations are rejected from `ep.simulate` so held-out measurements cannot accidentally condition a prediction.
+
+## Explicit geometry workspace
+
+The pinned upstream QRS loader does not consume one general-purpose mesh file. It expects a directory containing separate CSV fields. CardiEP therefore requires a typed `CampsWorkspaceManifest` with SHA-256-pinned artifacts for:
+
+- node coordinates;
+- tetrahedral connectivity;
+- LV endocardial node indices;
+- RV endocardial node indices;
+- fibre vectors;
+- sheet vectors;
+- normal vectors;
+- tetra material labels;
+- `ab_cut` ventricular coordinates;
+- `rt` ventricular coordinates; and
+- electrode coordinates.
+
+The manifest also records subject identity, source anatomy-bundle fingerprint, coordinate frame/unit, resolution and 0/1-based connectivity indexing. It deterministically generates the exact filenames expected by the audited upstream loader. The wrapper should materialize those files into a temporary run workspace rather than require users to rename source data manually.
+
+The adapter rejects a workspace when semantic artifact kinds, hashes, subject identity, coordinate-frame declarations, or anatomy-bundle lineage disagree.
+
+## ECG sampling-rate boundary
+
+The audited upstream `personalise_to_QRS.py` explicitly states that its hyperparameters assume a **1000-Hz time-series resolution**. CardiEP preserves that limitation instead of silently treating arbitrary patient ECG rates as equivalent.
+
+The request therefore uses:
+
+```text
+upstream_sample_rate_hz = 1000
+```
+
+Each measured ECG artifact must declare its actual `sample_rate_hz`. If it is not already 1000 Hz, the request must explicitly declare:
+
+```text
+ecg_resampling_method = "polyphase"
+```
+
+The wrapper result must then record the source rate(s), 1000-Hz target and resampling method in `provenance.ecg_preprocessing`. Representative/predicted ECG artifacts must declare `sample_rate_hz = 1000`.
+
+This is preprocessing for compatibility with the audited upstream workflow; it does not create information absent from the original ECG.
 
 ## Required calibration result
 
@@ -73,18 +114,22 @@ A wrapper calibration result is rejected unless it includes:
 - a representative/best simulation;
 - a SHA-256-pinned activation map;
 - a SHA-256-pinned standard 12-lead ECG artifact;
-- positive ECG sampling-rate metadata;
+- 1000-Hz ECG output metadata;
 - an explicit ECG artifact role;
 - `posterior_population_size >= 1`;
 - `inference_method = "smc_abc"`;
-- a named discrepancy metric; and
+- a named discrepancy metric;
+- the exact workspace-manifest fingerprint;
+- explicit ECG preprocessing provenance; and
 - exact provenance for upstream repository, upstream commit, wrapper version, paper DOI and CardiEP request hash.
 
 The representative simulation is useful for diagnostics, but the posterior artifact is mandatory because patient-specific inverse problems should not collapse uncertainty into one apparently exact biological parameter vector.
 
 ## Wrapper responsibilities
 
-The external wrapper must perform all upstream-specific work, including any conversion from CardiAnatomy geometry into the exact files/classes required by the selected Camps pipeline scripts. It must also make explicit which upstream parameterization and script configuration are used.
+The external wrapper must perform all upstream-specific work, including materializing the `CampsWorkspaceManifest` into the exact upstream CSV layout, staging the calibration ECG, performing any explicitly requested 1000-Hz resampling, writing the pinned path-mapping file inside an isolated workspace, executing the pinned QRS workflow, and converting the resulting posterior/activation/ECG artifacts back into CardiEP contracts.
+
+The audited upstream script currently contains hard-coded research workflow assumptions such as a fixed subject list, a `.custom_config/.your_path_mapping.txt` file, a fixed data/results directory structure and 1000-Hz hyperparameters. The wrapper must isolate those assumptions; CardiEP must not patch the upstream source in place or pretend that arbitrary inputs are natively supported.
 
 A wrapper must not claim compatibility merely because parameter names look similar. HeartTwin performs any later fast-model → detailed-model conversion through its separate versioned EP parameter-mapping contract.
 
