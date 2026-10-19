@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import math
 import os
 import shutil
 import stat
@@ -29,9 +28,9 @@ from .models import EPSimulationRequest, EPSimulationResult
 from .opencarp_backend import OPENCARP_BACKEND_NAME, OpenCARPExternalBackend
 from .opencarp_experiment import OpenCARPExperimentSpec
 from .opencarp_patient_qrs_v1 import (
-    PatientQRSProfileError,
     _REQUIRED_ELECTRODES,
     _STANDARD_12,
+    PatientQRSProfileError,
     _load_activation,
     _mesh_node_count,
     _opencarp_version,
