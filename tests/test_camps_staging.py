@@ -9,7 +9,7 @@ import pytest
 from cardiep.camps_staging import materialize_camps_geometry_workspace
 from cardiep.camps_workspace import CampsWorkspaceManifest
 from cardiep.models import ArtifactRef
-from cardiep.provenance import file_sha256
+from cardiep.provenance import file_sha256, uri_to_path
 
 
 def _write(path: Path, values) -> ArtifactRef:
@@ -84,7 +84,7 @@ def test_staging_materializes_exact_layout_and_converts_mm_to_cm(tmp_path: Path)
 
 def test_staging_detects_source_hash_change(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path)
-    source = Path(manifest.node_xyz.uri.removeprefix("file://"))
+    source = uri_to_path(manifest.node_xyz.uri)
     source.write_text("999,999,999\n", encoding="utf-8")
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
         materialize_camps_geometry_workspace(manifest, staging_root=tmp_path / "stage")
