@@ -1,6 +1,6 @@
 import pytest
 
-import cardiep.models as ep_models
+from cardiep import ArtifactRef, EPParameterSet, EPSimulationRequest, EPSimulationResult
 from cardiep.opencarp_backend import OpenCARPExternalBackend
 from cardiep.provenance import sha256_json
 
@@ -9,7 +9,7 @@ SHA = "a" * 64
 LEADS = ["I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"]
 
 
-def _request(**settings) -> ep_models.EPSimulationRequest:
+def _request(**settings) -> EPSimulationRequest:
     defaults = {
         "ecg_forward_model": "lead_field",
         "torso_mode": "standardized",
@@ -17,9 +17,9 @@ def _request(**settings) -> ep_models.EPSimulationRequest:
         "expected_leads": LEADS,
     }
     defaults.update(settings)
-    return ep_models.EPSimulationRequest(
+    return EPSimulationRequest(
         subject_id="P1",
-        anatomy_ref=ep_models.ArtifactRef(
+        anatomy_ref=ArtifactRef(
             artifact_id="mesh",
             kind="volume_mesh",
             uri="file:///mesh.vtu",
@@ -28,7 +28,7 @@ def _request(**settings) -> ep_models.EPSimulationRequest:
             metadata={"bundle_fingerprint": "b" * 64},
         ),
         backend="opencarp-external-v1",
-        parameters=ep_models.EPParameterSet(
+        parameters=EPParameterSet(
             values={"fibre_speed": 0.06},
             units={"fibre_speed": "cm/ms"},
             source="calibrated",
@@ -37,20 +37,20 @@ def _request(**settings) -> ep_models.EPSimulationRequest:
     )
 
 
-def _result(request: ep_models.EPSimulationRequest, **updates) -> ep_models.EPSimulationResult:
+def _result(request: EPSimulationRequest, **updates) -> EPSimulationResult:
     payload = {
         "subject_id": request.subject_id,
         "backend": "opencarp-external-v1",
         "parameters": request.parameters,
         "outputs": [
-            ep_models.ArtifactRef(
+            ArtifactRef(
                 artifact_id="activation",
                 kind="activation_map",
                 uri="file:///activation.dat",
                 sha256="c" * 64,
                 coordinate_frame="model",
             ),
-            ep_models.ArtifactRef(
+            ArtifactRef(
                 artifact_id="ecg",
                 kind="lead_field_ecg",
                 uri="file:///ecg.csv",
@@ -71,7 +71,7 @@ def _result(request: ep_models.EPSimulationRequest, **updates) -> ep_models.EPSi
         },
     }
     payload.update(updates)
-    return ep_models.EPSimulationResult.model_validate(payload)
+    return EPSimulationResult.model_validate(payload)
 
 
 def test_backend_is_unavailable_when_configured_wrapper_is_missing() -> None:
@@ -118,13 +118,13 @@ def test_pseudo_ecg_result_is_rejected() -> None:
     result = _result(
         request,
         outputs=[
-            ep_models.ArtifactRef(
+            ArtifactRef(
                 artifact_id="activation",
                 kind="activation_map",
                 uri="file:///activation.dat",
                 sha256="c" * 64,
             ),
-            ep_models.ArtifactRef(
+            ArtifactRef(
                 artifact_id="pseudo",
                 kind="pseudo_ecg",
                 uri="file:///pseudo.json",
