@@ -189,6 +189,7 @@ class OpenCARPExperimentSpec(BaseModel):
         "reaction_diffusion",
         "reaction_eikonal_minus",
         "reaction_eikonal_plus",
+        "prescribed_activation",
     ]
     tissue_regions: list[OpenCARPTissueRegion]
     fibre_field_required: bool
@@ -205,8 +206,8 @@ class OpenCARPExperimentSpec(BaseModel):
             raise ValueError("experiment_id/version must be explicit")
         if not self.tissue_regions:
             raise ValueError("at least one tissue region is required")
-        if not self.parameter_bindings:
-            raise ValueError("at least one explicit parameter binding is required")
+        if self.activation_model != "prescribed_activation" and not self.parameter_bindings:
+            raise ValueError("non-prescribed experiments require explicit parameter bindings")
         if not self.solver_options:
             raise ValueError("solver_options must be explicit and non-empty")
         if not self.provenance_reference.strip():

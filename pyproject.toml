@@ -22,6 +22,9 @@ cardiep-camps-qualified-driver = "cardiep.camps_qualified_driver:main"
 cardiep-opencarp-wrapper = "cardiep.opencarp_runtime_entry:main"
 cardiep-opencarp-dispatch = "cardiep.opencarp_driver_dispatch:main"
 
+[project.entry-points."cardiep.opencarp_experiment_drivers"]
+virelion_patient_qrs_prescribed_lf12 = "cardiep.opencarp_patient_qrs_v1:PatientQRSPrescribedLF12Driver"
+
 [project.urls]
 Repository = "https://github.com/Virelion-Biotech/Virelion-CardiEP"
 Issues = "https://github.com/Virelion-Biotech/Virelion-CardiEP/issues"
