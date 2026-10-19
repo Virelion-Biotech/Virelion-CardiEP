@@ -28,7 +28,7 @@ jobs:
       - name: Build public-data preflight
         run: python validation/physionet_case3/preflight.py
       - name: Build patient ventricular volume mesh
-        run: python validation/physionet_case3/mesh_patient.py
+        run: python validation/physionet_case3/mesh_patient_v2.py
       - name: Run sealed fast calibration then open holdout
         run: python validation/physionet_case3/calibrate_patient.py
       - name: Verify sealed model predates holdout result
