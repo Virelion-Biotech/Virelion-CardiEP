@@ -6,9 +6,9 @@ import pytest
 
 from cardiep.camps_cdt_backend import (
     CAMPS_CDT_BACKEND_NAME,
-    CampsCardiacDigitalTwinExternalBackend,
     UPSTREAM_DOI,
     UPSTREAM_REPOSITORY,
+    CampsCardiacDigitalTwinExternalBackend,
 )
 from cardiep.models import (
     ArtifactRef,
