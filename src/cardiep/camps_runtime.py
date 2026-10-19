@@ -103,11 +103,20 @@ class CampsRuntimePlan(BaseModel):
     request: dict[str, Any]
 
 
+def _strip_token_quotes(token: str) -> str:
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}:
+        return token[1:-1]
+    return token
+
+
 def _driver_tokens() -> list[str] | None:
     raw = os.environ.get("CARDIEP_CAMPS_DRIVER")
     if not raw:
         return None
-    tokens = shlex.split(raw)
+    tokens = [
+        _strip_token_quotes(token)
+        for token in shlex.split(raw, posix=os.name != "nt")
+    ]
     if not tokens:
         return None
     required = {"{plan}", "{output}"}
