@@ -1,0 +1,2 @@
+# Exact false-positive fingerprints: 64-character SHA-256 hashes in saved validation manifests/results, not credentials.
+d99ebe320c9e3948e083c59a7ffe3d0ba542c14c:validation/colab_numerical_2026_10_15/original/source_snapshots.json:generic-api-key:26
