@@ -32,7 +32,7 @@ jobs:
         run: python validation/physionet_case3/preflight.py
       - name: Upload preflight package
         if: steps.detect.outputs.available == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: physionet-case3-preflight
           path: case3_preflight
