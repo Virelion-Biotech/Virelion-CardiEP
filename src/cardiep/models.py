@@ -104,6 +104,8 @@ class EPDiseaseContext(BaseModel):
         if self.disease_label!="unknown" or self.phenotype_label is not None:
             if not self.phenotype_label_source_record_ids or not self.phenotype_label_source_provenance:
                 raise ValueError("disease/phenotype labels require independent phenotype source record IDs and provenance")
+            for name in ("baseline_definition","comparator_definition","uncertainty_reference"):
+                if not getattr(self,name): raise ValueError(f"known disease context requires {name}; use an explicit not_reported status when unavailable")
         for i, source in enumerate(self.phenotype_label_source_provenance):
             for key in ("source_identifier","source_type","source_url","source_sha256"):
                 if not isinstance(source.get(key),str) or not source[key].strip():
