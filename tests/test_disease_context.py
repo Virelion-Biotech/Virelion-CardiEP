@@ -1,6 +1,13 @@
 import pytest
 from pydantic import ValidationError
-from cardiep.models import ArtifactRef, EPDiseaseContext, EPParameterSet, EPSimulationRequest, EPSimulationResult
+
+from cardiep.models import (
+    ArtifactRef,
+    EPDiseaseContext,
+    EPParameterSet,
+    EPSimulationRequest,
+    EPSimulationResult,
+)
 from cardiep.service import CardiEPService, ReadinessError
 
 def source():
