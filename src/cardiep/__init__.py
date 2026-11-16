@@ -10,9 +10,9 @@ from .geometry import EPGeometry, load_ep_geometry
 from .handoff import calibration_request_from_electrotrace, observations_from_electrotrace
 from .models import (
     ArtifactRef,
-    EPDiseaseContext,
     EPCalibrationRequest,
     EPCalibrationResult,
+    EPDiseaseContext,
     EPObservation,
     EPParameterSet,
     EPSimulationRequest,
