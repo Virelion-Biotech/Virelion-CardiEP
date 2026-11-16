@@ -1,0 +1,40 @@
+{
+  "schema_version": "cardiep-physionet-case3-campaign-v1",
+  "subject_id": "physionet-cinc2007-case3",
+  "source": {
+    "dataset": "PhysioNet/Computing in Cardiology Challenge 2007",
+    "version": "1.0.0",
+    "case": "Case 3",
+    "base_url": "https://physionet.org/files/challenge-2007/1.0.0/data/"
+  },
+  "coordinate_frame": {
+    "name": "case3_model_mm",
+    "units": "mm",
+    "x": "frontal",
+    "y": "toward_left_arm",
+    "z": "feet_to_head"
+  },
+  "evidence_split": {
+    "calibration_leads": ["I", "II", "V1", "V2", "V4"],
+    "primary_holdout_leads": ["V5", "V6"],
+    "secondary_check_leads": ["III", "aVR", "aVL", "aVF", "V3"],
+    "semantics": "same_acquisition_spatial_lead_holdout",
+    "frozen_before_fit": true
+  },
+  "fast_inverse": {
+    "backend": "numpy-eikonal-v1",
+    "calibrated_parameters": ["isotropic_speed"],
+    "parameter_unit": "cm/ms",
+    "root_selection": "fixed_endocardial_farthest_point_heuristic",
+    "anisotropy": "not_used_no_measured_fibre_field"
+  },
+  "confirmation": {
+    "backend": "opencarp-external-v1",
+    "experiment_id": "virelion-patient-qrs-recorded-lf12",
+    "experiment_version": "1.0.0",
+    "propagation_mode": "prescribed_activation_not_independent_propagation",
+    "torso_mode": "patient_specific",
+    "electrode_mode": "recorded"
+  },
+  "primary_holdout_policy": "No primary holdout waveform may affect parameter bounds, root count, root locations, meshing choices, solver settings, stopping rules, or experiment-profile tuning."
+}
