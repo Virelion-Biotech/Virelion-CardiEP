@@ -76,6 +76,7 @@ class EPDiseaseContext(BaseModel):
     source_provenance: list[dict[str, Any]] = Field(default_factory=list)
     phenotype_label: str | None = None
     phenotype_label_source_record_ids: list[str] = Field(default_factory=list)
+    phenotype_label_source_provenance: list[dict[str, Any]] = Field(default_factory=list)
     baseline_definition: dict[str, Any] = Field(default_factory=dict)
     comparator_definition: dict[str, Any] = Field(default_factory=dict)
     uncertainty_reference: dict[str, Any] = Field(default_factory=dict)
@@ -95,6 +96,16 @@ class EPDiseaseContext(BaseModel):
                 raise ValueError("reported/curated genotype requires source record IDs and provenance")
         if self.genotype_status=="unknown" and self.variants:
             raise ValueError("unknown genotype cannot contain asserted variant records")
+        if self.disease_label!="unknown" or self.phenotype_label is not None:
+            if not self.phenotype_label_source_record_ids or not self.phenotype_label_source_provenance:
+                raise ValueError("disease/phenotype labels require independent phenotype source record IDs and provenance")
+        for i, source in enumerate(self.phenotype_label_source_provenance):
+            for key in ("source_identifier","source_type","source_url","source_sha256"):
+                if not isinstance(source.get(key),str) or not source[key].strip():
+                    raise ValueError(f"phenotype_label_source_provenance[{i}].{key} is required")
+            digest=source["source_sha256"]
+            if len(digest)!=64 or any(ch not in string.hexdigits for ch in digest):
+                raise ValueError(f"phenotype_label_source_provenance[{i}].source_sha256 must be SHA-256")
         for i, source in enumerate(self.source_provenance):
             for key in ("source_identifier","source_type","source_url","source_sha256"):
                 if not isinstance(source.get(key),str) or not source[key].strip():
