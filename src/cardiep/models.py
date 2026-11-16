@@ -204,8 +204,15 @@ class EPCalibrationRequest(BaseModel):
     def require_problem_definition(self) -> EPCalibrationRequest:
         if not self.observations:
             raise ValueError("At least one calibration observation is required")
-        if self.disease_context is not None and self.disease_context.parameter_mapping is not None and self.disease_context.parameter_mapping["backend"] != self.backend:
-            raise ValueError("calibrated disease parameter mapping backend mismatch")
+        if self.disease_context is not None and self.disease_context.parameter_mapping is not None:
+            mapping=self.disease_context.parameter_mapping
+            if mapping["backend"] != self.backend:
+                raise ValueError("calibrated disease parameter mapping backend mismatch")
+            if self.initial_parameters is None:
+                raise ValueError("calibrated disease parameter mapping requires explicit initial_parameters")
+            for name,value in mapping["parameters"].items():
+                if self.initial_parameters.values.get(name) != value:
+                    raise ValueError(f"initial EP parameter {name!r} differs from explicit calibrated disease mapping")
         _require_unique_observations(self.observations)
         for name, (lo, hi) in self.parameter_bounds.items():
             if not (math.isfinite(float(lo)) and math.isfinite(float(hi))):
