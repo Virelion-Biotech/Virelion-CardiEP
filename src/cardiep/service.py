@@ -50,7 +50,9 @@ class CardiEPService:
         return backend
 
     def simulate(self, request: EPSimulationRequest) -> EPSimulationResult:
-        result = self._backend(request.backend).simulate(request)
+        backend = self._backend(request.backend)
+        self._validate_disease_mechanism_capabilities(backend, request.disease_context)
+        result = backend.simulate(request)
         if result.subject_id != request.subject_id:
             raise ReadinessError("Backend returned a different subject")
         if result.backend != request.backend:
@@ -59,6 +61,7 @@ class CardiEPService:
             )
 
         self._preserve_anatomy(request, result)
+        self._preserve_disease_context(request, result)
         return result
 
     @staticmethod
@@ -79,7 +82,9 @@ class CardiEPService:
             result.provenance[key] = value
 
     def calibrate(self, request: EPCalibrationRequest) -> EPCalibrationResult:
-        result = self._backend(request.backend).calibrate(request)
+        backend = self._backend(request.backend)
+        self._validate_disease_mechanism_capabilities(backend, request.disease_context)
+        result = backend.calibrate(request)
         if result.subject_id != request.subject_id:
             raise ReadinessError("Backend returned inference for a different subject")
         if result.backend != request.backend:
@@ -90,5 +95,33 @@ class CardiEPService:
             if result.simulated.subject_id != request.subject_id or result.simulated.backend != request.backend:
                 raise ReadinessError("Calibration returned a mismatched nested simulation")
             self._preserve_anatomy(request, result.simulated)
+            self._preserve_disease_context(request, result.simulated)
         self._preserve_anatomy(request, result)
+        self._preserve_disease_context(request, result)
         return result
+
+    @staticmethod
+    def _validate_disease_mechanism_capabilities(backend, disease_context):
+        if disease_context is None or not disease_context.requested_mechanisms:
+            return
+        declared = getattr(backend, "supported_mechanisms", None)
+        if declared is None and backend.name == "numpy-eikonal-v1":
+            declared = {"conduction", "repolarization", "scar_tissue_properties"}
+        if declared is None:
+            raise ReadinessError("Backend must explicitly declare supported_mechanisms before disease-specific mechanisms are requested")
+        unsupported = sorted(set(disease_context.requested_mechanisms) - set(declared))
+        if unsupported:
+            raise ReadinessError("Backend does not support requested disease mechanisms: " + ", ".join(unsupported))
+
+    @staticmethod
+    def _preserve_disease_context(request, result):
+        if request.disease_context is None:
+            return
+        import hashlib
+        import json
+        context = request.disease_context.model_dump(mode="json")
+        digest = hashlib.sha256(json.dumps(context, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+        for key, value in (("disease_context", context), ("disease_context_sha256", digest)):
+            if key in result.provenance and result.provenance[key] != value:
+                raise ReadinessError(f"Backend returned conflicting disease-context provenance: {key}")
+            result.provenance[key] = value
