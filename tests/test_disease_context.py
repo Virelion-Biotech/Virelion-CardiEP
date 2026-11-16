@@ -77,3 +77,24 @@ def test_calibration_mapping_requires_matching_initial_parameters():
     observation=EPObservation(observation_id="ecg1",kind="ecg",artifact=ArtifactRef(artifact_id="ecg",kind="electrotrace_ecg_calibration",uri="file:///tmp/ecg.json",sha256="b"*64))
     with pytest.raises(ValidationError,match="differs from explicit calibrated disease mapping"):
         EPCalibrationRequest(subject_id="S1",anatomy_ref=ArtifactRef(artifact_id="anat",kind="ep_geometry",uri="file:///tmp/a.json"),observations=[observation],backend="numpy-eikonal-v1",parameter_bounds={"fibre_speed":(0.05,0.15)},initial_parameters=EPParameterSet(values={"fibre_speed":0.065}),disease_context=ctx)
+
+
+def test_explicit_calibrated_mapping_is_preserved_when_values_match():
+    mapping = {
+        "mapping_id": "pln-map-v1",
+        "backend": "numpy-eikonal-v1",
+        "calibration_evidence_ids": ["cal-1"],
+        "source_bundle_sha256": ["b" * 64],
+        "calibration_cohort": {"cohort_id": "C1"},
+        "subject_split": {"split_group_id": "S1"},
+        "parameters": {"fibre_speed": 0.08},
+    }
+    calibrated_request = request(
+        context(parameter_mapping=mapping),
+        values={"fibre_speed": 0.08},
+    )
+    assert calibrated_request.parameters.values["fibre_speed"] == 0.08
+    assert (
+        calibrated_request.disease_context.parameter_mapping["mapping_id"]
+        == "pln-map-v1"
+    )
