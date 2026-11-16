@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .models import ArtifactRef, EPCalibrationRequest, EPObservation, EPParameterSet
+from .models import ArtifactRef, EPDiseaseContext, EPCalibrationRequest, EPObservation, EPParameterSet
 
 
 def _validate_handoff_subject(handoff: Mapping[str, Any], subject_id: str) -> None:
@@ -41,6 +41,7 @@ def calibration_request_from_electrotrace(
     initial_parameters: EPParameterSet | Mapping[str, Any] | None = None,
     inference_backend: str | None = None,
     settings: Mapping[str, Any] | None = None,
+    disease_context: EPDiseaseContext | Mapping[str, Any] | None = None,
 ) -> EPCalibrationRequest:
     """Create a typed CardiEP calibration request from an ElectroTrace handoff."""
     _validate_handoff_subject(handoff, subject_id)
@@ -56,6 +57,15 @@ def calibration_request_from_electrotrace(
             if isinstance(initial_parameters, EPParameterSet)
             else EPParameterSet.model_validate(initial_parameters)
         )
+    observations = observations_from_electrotrace(handoff)
+    context = None
+    if disease_context is not None:
+        context = disease_context if isinstance(disease_context, EPDiseaseContext) else EPDiseaseContext.model_validate(disease_context)
+        handoff_hashes = sorted({item.artifact.sha256 for item in observations if item.artifact.sha256})
+        if context.electrotrace_bundle_sha256 and not set(handoff_hashes).issubset(set(context.electrotrace_bundle_sha256)):
+            raise ValueError("disease context ElectroTrace hashes do not cover the supplied handoff artifacts")
+        if handoff_hashes:
+            context = context.model_copy(update={"electrotrace_bundle_sha256": sorted(set(context.electrotrace_bundle_sha256) | set(handoff_hashes))})
     merged_settings = dict(settings or {})
     if handoff.get("schema_version"):
         merged_settings.setdefault(
@@ -66,8 +76,9 @@ def calibration_request_from_electrotrace(
     return EPCalibrationRequest(
         subject_id=subject_id,
         anatomy_ref=anatomy,
-        observations=observations_from_electrotrace(handoff),
+        observations=observations,
         backend=backend,
+        disease_context=context,
         parameter_bounds=dict(parameter_bounds),
         initial_parameters=initial,
         inference_backend=inference_backend,
