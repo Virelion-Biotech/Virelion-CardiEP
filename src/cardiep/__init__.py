@@ -52,6 +52,7 @@ __all__ = [
     "DiscrepancyReport",
     "DiscrepancyTerm",
     "ECGResult",
+    "EPDiseaseContext",
     "EPCalibrationRequest",
     "EPCalibrationResult",
     "EPGeometry",
