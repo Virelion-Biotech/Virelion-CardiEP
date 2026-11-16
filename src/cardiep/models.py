@@ -94,6 +94,11 @@ class EPDiseaseContext(BaseModel):
         if self.genotype_status in {"reported","curated"}:
             if not self.source_record_ids or not self.source_provenance:
                 raise ValueError("reported/curated genotype requires source record IDs and provenance")
+            for i, variant in enumerate(self.variants):
+                if not isinstance(variant.get("gene_symbol"),str) or not variant["gene_symbol"].strip():
+                    raise ValueError(f"variants[{i}].gene_symbol is required")
+                if not isinstance(variant.get("variant_nomenclature"),str) or not variant["variant_nomenclature"].strip():
+                    raise ValueError(f"variants[{i}].variant_nomenclature is required; unknown must be explicit")
         if self.genotype_status=="unknown" and self.variants:
             raise ValueError("unknown genotype cannot contain asserted variant records")
         if self.disease_label!="unknown" or self.phenotype_label is not None:
@@ -122,6 +127,10 @@ class EPDiseaseContext(BaseModel):
             if missing: raise ValueError("parameter_mapping missing: "+", ".join(missing))
             if not self.parameter_mapping["calibration_evidence_ids"]:
                 raise ValueError("parameter_mapping requires calibration evidence")
+            if not isinstance(self.parameter_mapping["calibration_cohort"],dict) or not self.parameter_mapping["calibration_cohort"]:
+                raise ValueError("parameter_mapping requires calibration cohort metadata")
+            if not isinstance(self.parameter_mapping["subject_split"],dict) or not self.parameter_mapping["subject_split"]:
+                raise ValueError("parameter_mapping requires subject split metadata")
             if not self.parameter_mapping["parameters"]:
                 raise ValueError("parameter_mapping requires explicit parameter values")
             for digest in self.parameter_mapping["source_bundle_sha256"]:
