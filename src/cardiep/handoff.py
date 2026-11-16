@@ -4,7 +4,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .models import ArtifactRef, EPDiseaseContext, EPCalibrationRequest, EPObservation, EPParameterSet
+from .models import (
+    ArtifactRef,
+    EPCalibrationRequest,
+    EPDiseaseContext,
+    EPObservation,
+    EPParameterSet,
+)
 
 
 def _validate_handoff_subject(handoff: Mapping[str, Any], subject_id: str) -> None:
