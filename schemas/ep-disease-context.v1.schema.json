@@ -13,7 +13,7 @@
   "phenotype_label":{"type":["string","null"]},
   "phenotype_label_source_record_ids":{"type":"array","items":{"type":"string"}},
   "phenotype_label_source_provenance":{"type":"array","items":{"type":"object","required":["source_identifier","source_type","source_url","source_sha256"]}},
-  "baseline_definition":{"type":"object"},"comparator_definition":{"type":"object"},"uncertainty_reference":{"type":"object"},
+  "baseline_definition":{"type":"object","minProperties":1},"comparator_definition":{"type":"object","minProperties":1},"uncertainty_reference":{"type":"object","minProperties":1},
   "calibration_cohort":{"type":"object"},"subject_split":{"type":"object"},
   "electrotrace_bundle_sha256":{"type":"array","items":{"type":"string","pattern":"^[a-fA-F0-9]{64}$"}},
   "requested_mechanisms":{"type":"array","items":{"enum":["conduction","repolarization","scar_tissue_properties","desmosomal_integrity","intracellular_calcium_cycling","variant_specific_ionic_currents","proteostasis","autophagic_lysosomal_function"]}},
