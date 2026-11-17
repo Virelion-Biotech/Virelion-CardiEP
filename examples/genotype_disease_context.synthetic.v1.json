@@ -1,0 +1,27 @@
+{
+ "subject_id":"SYNTH-EP-001",
+ "anatomy_ref":{"artifact_id":"synthetic-anatomy","kind":"ep_geometry","uri":"file:///synthetic/anatomy.json","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+ "backend":"numpy-eikonal-v1",
+ "parameters":{"values":{"fibre_speed":0.065,"sheet_speed":0.051,"normal_speed":0.048,"purkinje_speed":0.30,"apd_min_ms":240.0,"apd_max_ms":320.0,"apd_gradient_tm":1.0},"units":{"fibre_speed":"cm/ms","sheet_speed":"cm/ms","normal_speed":"cm/ms","purkinje_speed":"cm/ms","apd_min_ms":"ms","apd_max_ms":"ms"},"source":"fixed"},
+ "disease_context":{
+  "disease_label":"PLN_cardiomyopathy",
+  "genotype_status":"reported",
+  "variants":[{"gene_symbol":"PLN","variant_nomenclature":"synthetic example: PLN-R14del","zygosity":"unknown","classification":"not_assessed"}],
+  "source_record_ids":["synthetic-source-1"],
+  "source_provenance":[{"source_identifier":"synthetic-fixture","source_type":"synthetic_fixture","source_url":"https://example.invalid/synthetic-fixture","source_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
+  "phenotype_label":"synthetic PLN-associated cardiomyopathy context",
+  "phenotype_label_source_record_ids":["synthetic-phenotype-1"],
+  "phenotype_label_source_provenance":[{"source_identifier":"synthetic-phenotype-fixture","source_type":"synthetic_fixture","source_url":"https://example.invalid/synthetic-phenotype","source_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
+  "baseline_definition":{"type":"synthetic reference baseline"},
+  "comparator_definition":{"type":"synthetic genotype-unknown reference"},
+  "uncertainty_reference":{"status":"not_calibrated"},
+  "calibration_cohort":{"cohort_id":"synthetic-only"},
+  "subject_split":{"subject_id":"SYNTH-EP-001","split_group_id":"SYNTH-EP-001"},
+  "electrotrace_bundle_sha256":["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"],
+  "requested_mechanisms":["conduction"],
+  "parameter_mapping":null,
+  "inferred_from_ecg":false
+ },
+ "observations":[],
+ "settings":{"root_nodes":[0]}
+}

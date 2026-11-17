@@ -275,3 +275,8 @@ python scripts/run_cpu_validation.py
 ```
 
 These checks need no GPU. They verify numerical implementation and synthetic recovery; they do not establish biological or clinical validity.
+
+
+## Genotype-aware EP disease context
+
+An optional `EPDiseaseContext` can accompany simulation/calibration requests. It preserves source-linked genotype and phenotype labels, ElectroTrace ECG-bundle hashes, baseline/comparator/uncertainty references, calibration cohort and subject split separately from EP parameters. Genotype labels never modify parameters automatically. The fast Eikonal backend rejects intracellular-calcium, variant-specific ionic-current, desmosomal, proteostasis and autophagic mechanisms; external backends must explicitly declare supported mechanisms. See [disease-context contract](docs/GENOTYPE_DISEASE_CONTEXT.md).

@@ -1,0 +1,23 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://virelionbiotech.org/schemas/ep-disease-context.v1.schema.json",
+ "title":"CardiEP provenance-aware disease and genotype context",
+ "type":"object",
+ "required":["disease_label","genotype_status","variants","source_record_ids","source_provenance","phenotype_label_source_record_ids","phenotype_label_source_provenance","baseline_definition","comparator_definition","uncertainty_reference","calibration_cohort","subject_split","electrotrace_bundle_sha256","requested_mechanisms","inferred_from_ecg"],
+ "properties":{
+  "disease_label":{"enum":["PKP2_ACM","PLN_cardiomyopathy","BAG3_DCM","LAMP2_Danon","CASQ2_arrhythmia","other","unknown"]},
+  "genotype_status":{"enum":["unknown","reported","curated"]},
+  "variants":{"type":"array","items":{"type":"object","required":["gene_symbol","variant_nomenclature"],"properties":{"gene_symbol":{"type":"string","minLength":1},"variant_nomenclature":{"type":"string","minLength":1},"zygosity":{"type":["string","null"]},"genome_build":{"type":["string","null"]},"transcript":{"type":["string","null"]},"protein_consequence":{"type":["string","null"]},"classification":{"type":["string","null"]}},"additionalProperties":true}},
+  "source_record_ids":{"type":"array","items":{"type":"string"}},
+  "source_provenance":{"type":"array","items":{"type":"object","required":["source_identifier","source_type","source_url","source_sha256"],"properties":{"source_identifier":{"type":"string"},"source_type":{"type":"string"},"source_url":{"type":"string","format":"uri"},"source_sha256":{"type":"string","pattern":"^[a-fA-F0-9]{64}$"}}}},
+  "phenotype_label":{"type":["string","null"]},
+  "phenotype_label_source_record_ids":{"type":"array","items":{"type":"string"}},
+  "phenotype_label_source_provenance":{"type":"array","items":{"type":"object","required":["source_identifier","source_type","source_url","source_sha256"]}},
+  "baseline_definition":{"type":"object","minProperties":1},"comparator_definition":{"type":"object","minProperties":1},"uncertainty_reference":{"type":"object","minProperties":1},
+  "calibration_cohort":{"type":"object"},"subject_split":{"type":"object"},
+  "electrotrace_bundle_sha256":{"type":"array","items":{"type":"string","pattern":"^[a-fA-F0-9]{64}$"}},
+  "requested_mechanisms":{"type":"array","items":{"enum":["conduction","repolarization","scar_tissue_properties","desmosomal_integrity","intracellular_calcium_cycling","variant_specific_ionic_currents","proteostasis","autophagic_lysosomal_function"]}},
+  "parameter_mapping":{"type":["object","null"]},"inferred_from_ecg":{"const":false}
+ },
+ "additionalProperties":false
+}

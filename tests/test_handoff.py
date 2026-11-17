@@ -53,3 +53,18 @@ def test_calibration_builder_accepts_matching_subject_handoff() -> None:
     )
     assert request.subject_id == "S1"
     assert request.observations[0].artifact.artifact_id == "obs-artifact"
+
+
+def test_disease_context_receives_electrotrace_bundle_hashes():
+    from cardiep.models import EPDiseaseContext
+
+    context = EPDiseaseContext()
+    request = calibration_request_from_electrotrace(
+        _handoff("S1"),
+        subject_id="S1",
+        anatomy_ref={"artifact_id":"mesh","kind":"ep_geometry","uri":"file:///tmp/mesh.json"},
+        backend="numpy-eikonal-v1",
+        parameter_bounds={"fibre_speed":(0.05,0.15)},
+        disease_context=context,
+    )
+    assert request.disease_context.electrotrace_bundle_sha256 == ["a"*64]
